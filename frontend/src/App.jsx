@@ -4,6 +4,8 @@ import LoginPage from "./pages/LoginPage";
 import LabDashboard from "./pages/LabDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import NurseDashboard from "./pages/NurseDashboard";
+import DoctorDashboard from "./pages/DoctorDashboard";
+import PatientDashboard from "./pages/PatientDashboard";
 
 function AppInner() {
   const { user, logout, loading } = useAuth();
@@ -23,7 +25,7 @@ function AppInner() {
         fontSize: 28, color: "#060b14", fontWeight: 700,
         boxShadow: "0 0 32px rgba(0,212,255,0.3)",
       }}>+</div>
-      <div>Initializing MedFlow v3...</div>
+      <div>Initializing MedFlow v4...</div>
     </div>
   );
 
@@ -35,16 +37,16 @@ function AppInner() {
   if (!currentRole) return <LoginPage onLogin={handleLogin} />;
 
   const userData = {
-    name: user?.full_name || localStorage.getItem("name") || "Hospital Staff",
+    name: user?.full_name || localStorage.getItem("name") || "User",
     role: currentRole,
     id: user?.id,
-    extra: user, // contains doctor_id, nurse_id etc from /me
+    extra: user,
   };
 
-  // Routing Based on Role
+  if (currentRole === "PATIENT") return <PatientDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "LAB_TECHNICIAN") return <LabDashboard onLogout={handleLogout} />;
   if (currentRole === "SUPER_ADMIN") return <AdminDashboard user={userData} onLogout={handleLogout} />;
-  if (currentRole === "DOCTOR") return <AdminDashboard user={userData} onLogout={handleLogout} />;
+  if (currentRole === "DOCTOR") return <DoctorDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "NURSE") return <NurseDashboard user={userData} onLogout={handleLogout} />;
 
   return <LoginPage onLogin={handleLogin} />;

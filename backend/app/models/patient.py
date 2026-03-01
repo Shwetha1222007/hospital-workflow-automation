@@ -51,6 +51,8 @@ class Patient(Base):
     doctor        = relationship("Doctor", back_populates="patients")
     lab_reports   = relationship("LabReport", back_populates="patient")
     workflow_logs = relationship("WorkflowLog", back_populates="patient", cascade="all, delete-orphan")
+    tickets       = relationship("Ticket", back_populates="patient", cascade="all, delete-orphan")
+    patient_user  = relationship("PatientUser", back_populates="patient", uselist=False, cascade="all, delete-orphan")
 
 
 def generate_patient_code(session: Session) -> str:

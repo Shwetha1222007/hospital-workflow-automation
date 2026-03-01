@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { API } from "../context/AuthContext";
+import { API, authAxios } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 
 const SPECIALIZATIONS = ["CARDIOLOGIST", "ORTHOPEDIC", "NEUROLOGIST", "GENERAL", "PEDIATRICIAN", "OPHTHALMOLOGIST", "DERMATOLOGIST", "PSYCHIATRIST"];
@@ -134,6 +134,218 @@ function AddPatientPanel({ onAdded, token }) {
   );
 }
 
+/* ── Patient Workflow Board ──────────────────────────────────────────────── */
+
+const BOARD_COLORS = {
+  RED: { bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.35)", text: "#ef4444" },
+  GREEN: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.35)", text: "#22c55e" },
+  YELLOW: { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.35)", text: "#f59e0b" },
+  BLUE: { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", text: "#3b82f6" },
+};
+
+function PatientWorkflowBoard() {
+  const [tableData, setTableData] = useState([]);
+  const [drawer, setDrawer] = useState(null);
+  const [timeline, setTimeline] = useState(null);
+  const [filterDoctor, setFilterDoctor] = useState("");
+  const [filterNurse, setFilterNurse] = useState("");
+  const [filterStage, setFilterStage] = useState("");
+
+  useEffect(() => {
+    authAxios().get("/patients/admin-table")
+      .then(r => setTableData(r.data))
+      .catch(console.error);
+  }, []);
+
+  const openTimeline = async (patCode, patId, name) => {
+    setDrawer({ patient_code: patCode, patient_id: patId, name });
+    setTimeline(null);
+    try {
+      const r = await authAxios().get(`/movement-logs/patient/${patId}/summary`);
+      setTimeline(r.data);
+    } catch { setTimeline({ steps: [] }); }
+  };
+
+  const filtered = tableData
+    .filter(r => !filterDoctor || r.doctor_name?.includes(filterDoctor))
+    .filter(r => !filterNurse || r.nurse_name?.includes(filterNurse))
+    .filter(r => !filterStage || r.current_stage?.toLowerCase().includes(filterStage.toLowerCase()));
+
+  const uniqueDocs = [...new Set(tableData.map(r => r.doctor_name).filter(Boolean))];
+  const uniqueNurse = [...new Set(tableData.map(r => r.nurse_name).filter(Boolean))];
+
+  const card = { background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 16, padding: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.3)" };
+
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ margin: 0 }}>🏥 Patient Workflow Board</h2>
+        <div style={{ fontSize: 13, color: "#5a7aa0" }}>{filtered.length} patients</div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+        {[
+          ["Doctor", filterDoctor, setFilterDoctor, uniqueDocs],
+          ["Nurse", filterNurse, setFilterNurse, uniqueNurse],
+        ].map(([label, val, setter, opts]) => (
+          <select key={label} value={val} onChange={e => setter(e.target.value)}
+            style={{ padding: "8px 12px", borderRadius: 8, background: "#060b14", border: "1px solid #1e2d4a", color: "#e2eaf5", fontSize: 12 }}>
+            <option value="">All {label}s</option>
+            {opts.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        ))}
+        <input value={filterStage} onChange={e => setFilterStage(e.target.value)}
+          placeholder="Filter by stage…"
+          style={{ padding: "8px 12px", borderRadius: 8, background: "#060b14", border: "1px solid #1e2d4a", color: "#e2eaf5", fontSize: 12, flex: 1, minWidth: 160 }} />
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ color: "#4a6a8a", fontSize: 11, textTransform: "uppercase", letterSpacing: 1, textAlign: "left" }}>
+              {["ID", "Patient", "Doctor", "Nurse", "Current Stage", "Time in Stage", "Priority", ""].map(h => (
+                <th key={h} style={{ padding: "10px 14px", borderBottom: "1px solid #1e2d4a" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((row, i) => {
+              const cm = BOARD_COLORS[row.stage_color] || BOARD_COLORS.YELLOW;
+              const isDelay = row.time_in_stage_mins > 60;
+              return (
+                <tr key={i} style={{ borderBottom: "1px solid #1e2d4a" }}>
+                  <td style={{ padding: "14px", fontFamily: "monospace", color: "#00d4ff", fontWeight: 700 }}>{row.patient_code}</td>
+                  <td style={{ padding: "14px", fontWeight: 600 }}>{row.name}</td>
+                  <td style={{ padding: "14px", color: "#5a7aa0", fontSize: 12 }}>{row.doctor_name || "—"}</td>
+                  <td style={{ padding: "14px", color: "#5a7aa0", fontSize: 12 }}>{row.nurse_name || "—"}</td>
+                  <td style={{ padding: "14px" }}>
+                    <span style={{ background: cm.bg, border: `1px solid ${cm.border}`, color: cm.text, borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 700 }}>
+                      {row.current_stage?.length > 35 ? row.current_stage.substring(0, 35) + "…" : row.current_stage}
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px" }}>
+                    <span style={{ color: isDelay ? "#f59e0b" : "#5a7aa0", fontWeight: isDelay ? 700 : 400 }}>
+                      {row.time_in_stage_mins}m {isDelay && "⚠️"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px" }}><PriorityBadge priority={row.priority} /></td>
+                  <td style={{ padding: "14px" }}>
+                    <button onClick={() => openTimeline(row.patient_code, row.patient_id, row.name)}
+                      style={{ padding: "6px 12px", borderRadius: 8, background: "#00d4ff11", border: "1px solid #00d4ff33", color: "#00d4ff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                      📋 Timeline
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "#5a7aa0" }}>No patients found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {drawer && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex" }}>
+          <div style={{ flex: 1, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={() => setDrawer(null)} />
+          <div style={{ width: 420, background: "#0d1526", borderLeft: "1px solid #1e2d4a", overflowY: "auto", padding: 32 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div>
+                <div style={{ color: "#00d4ff", fontFamily: "monospace", fontWeight: 700, fontSize: 13 }}>{drawer.patient_code}</div>
+                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>{drawer.name}</div>
+                <div style={{ color: "#5a7aa0", fontSize: 12, marginTop: 2 }}>Workflow Timeline</div>
+              </div>
+              <button onClick={() => setDrawer(null)} style={{ background: "none", border: "none", color: "#5a7aa0", fontSize: 22, cursor: "pointer" }}>✕</button>
+            </div>
+            {!timeline && <div style={{ color: "#00d4ff", fontFamily: "monospace", fontSize: 12, padding: "20px 0" }}>Loading timeline…</div>}
+            {timeline && (() => {
+              const steps = timeline.steps || [];
+              const actionLower = (timeline.current_stage || "").toLowerCase();
+              // Determine which of the 4 stages is reached
+              const stageIndex =
+                actionLower.includes("complet") ? 3 :
+                  actionLower.includes("lab") ? 2 :
+                    actionLower.includes("doctor") || actionLower.includes("consult") ? 1 : 0;
+
+              const progressSteps = ["Registered", "Doctor Review", "Lab Tests", "Completed"];
+
+              return (
+                <>
+                  {/* ── Treatment Progress Bar ── */}
+                  <div style={{ marginBottom: 24, background: "#060b14", borderRadius: 12, padding: 16, border: "1px solid #1e2d4a" }}>
+                    <div style={{ fontSize: 10, color: "#5a7aa0", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, fontWeight: 700 }}>
+                      Workflow Progress
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      {progressSteps.map((label, i) => {
+                        const done = i <= stageIndex;
+                        const active = i === stageIndex;
+                        return (
+                          <React.Fragment key={i}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+                              <div style={{
+                                width: 32, height: 32, borderRadius: "50%",
+                                background: done ? (active ? "#00d4ff" : "#22c55e") : "#1e2d4a",
+                                border: `2px solid ${done ? (active ? "#00d4ff" : "#22c55e") : "#2a3a5a"}`,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: done ? 14 : 12, color: done ? "#fff" : "#4a6a8a",
+                                boxShadow: active ? "0 0 12px rgba(0,212,255,0.5)" : "none",
+                                transition: "all 0.3s",
+                              }}>
+                                {done && !active ? "✓" : i + 1}
+                              </div>
+                              <div style={{ fontSize: 9, color: done ? (active ? "#00d4ff" : "#22c55e") : "#4a6a8a", marginTop: 6, textAlign: "center", fontWeight: done ? 700 : 400 }}>
+                                {label}
+                              </div>
+                            </div>
+                            {i < progressSteps.length - 1 && (
+                              <div style={{ height: 2, flex: 1, background: i < stageIndex ? "#22c55e" : "#1e2d4a", marginBottom: 20, transition: "all 0.3s" }} />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* ── Current Stage Banner ── */}
+                  <div style={{ background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.15)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
+                    <div style={{ fontSize: 10, color: "#5a7aa0", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Current Stage</div>
+                    <div style={{ color: "#00d4ff", fontWeight: 700, fontSize: 13 }}>{timeline.current_stage}</div>
+                    <div style={{ color: "#4a6a8a", fontSize: 11, marginTop: 2 }}>⏱ {timeline.time_in_stage_mins} mins in this stage</div>
+                  </div>
+
+                  {/* ── Timeline Steps ── */}
+                  <div style={{ fontSize: 10, color: "#5a7aa0", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, fontWeight: 700 }}>Event Log</div>
+                  {steps.length === 0 && <div style={{ color: "#5a7aa0", fontSize: 13 }}>No events recorded yet.</div>}
+                  {steps.map((step, idx) => {
+                    const cm = BOARD_COLORS[step.color_code] || BOARD_COLORS.YELLOW;
+                    return (
+                      <div key={idx} style={{ display: "flex", gap: 14, marginBottom: 20 }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <div style={{ width: 14, height: 14, borderRadius: "50%", background: cm.text, border: `2px solid ${cm.border}`, flexShrink: 0, marginTop: 3 }} />
+                          {idx < steps.length - 1 && <div style={{ width: 2, flex: 1, background: "#1e2d4a", marginTop: 4 }} />}
+                        </div>
+                        <div style={{ paddingBottom: 12 }}>
+                          <div style={{ color: "#e2eaf5", fontWeight: 600, fontSize: 13 }}>{step.action}</div>
+                          {step.actor_name && <div style={{ color: "#5a7aa0", fontSize: 11, marginTop: 2 }}>by {step.actor_name}</div>}
+                          <div style={{ color: "#4a6a8a", fontSize: 11, marginTop: 2 }}>{new Date(step.timestamp).toLocaleString()}</div>
+                          <span style={{ background: cm.bg, border: `1px solid ${cm.border}`, color: cm.text, borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700, marginTop: 4, display: "inline-block" }}>
+                            {step.status || step.ref_type}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Dashboard ─────────────────────────────────────────────────────── */
 
 export default function AdminDashboard({ user, onLogout }) {
@@ -141,23 +353,35 @@ export default function AdminDashboard({ user, onLogout }) {
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [nurses, setNurses] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [moveLogs, setMoveLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPat, setSelectedPat] = useState(null);
   const [diagnosis, setDiagnosis] = useState("");
   const [notes, setNotes] = useState("");
+  const [ticketNotes, setTicketNotes] = useState({});
+  const [toast, setToast] = useState("");
 
   const isSuper = user.role === "SUPER_ADMIN";
   const token = localStorage.getItem("token");
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3200); };
 
   const fetchData = async () => {
     try {
-      const pRes = await axios.get(`${API}/patients/`, { headers: { Authorization: `Bearer ${token}` } });
+      const ax = authAxios();
+      const pRes = await ax.get("/patients/");
       setPatients(pRes.data);
       if (isSuper) {
-        const dRes = await axios.get(`${API}/staff/doctors`, { headers: { Authorization: `Bearer ${token}` } });
+        const [dRes, nRes, tRes, lRes] = await Promise.all([
+          ax.get("/staff/doctors"),
+          ax.get("/staff/nurses"),
+          ax.get("/tickets/"),
+          ax.get("/movement-logs/"),
+        ]);
         setDoctors(dRes.data);
-        const nRes = await axios.get(`${API}/staff/nurses`, { headers: { Authorization: `Bearer ${token}` } });
         setNurses(nRes.data);
+        setTickets(tRes.data);
+        setMoveLogs(lRes.data);
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -173,9 +397,19 @@ export default function AdminDashboard({ user, onLogout }) {
     } catch (err) { alert("Update failed"); }
   };
 
+  const resolveTicket = async (ticketId, resolution) => {
+    try {
+      await authAxios().patch(`/tickets/${ticketId}/resolve`, { notes: resolution || "Resolved by admin" });
+      showToast("✅ Ticket resolved");
+      fetchData();
+    } catch (err) { console.error("resolve error", err?.response?.data); }
+  };
+
   const menu = isSuper ? [
     { id: "patients", label: "Patient Records", icon: "👥" },
     { id: "add-patient", label: "New Patient", icon: "➕" },
+    { id: "tickets", label: `Tickets (${tickets.filter(t => t.status !== "RESOLVED").length} open)`, icon: "📩" },
+    { id: "movement-logs", label: "Movement Logs", icon: "📋" },
     { id: "staff", label: "Manage Staff", icon: "🏥" },
   ] : [
     { id: "patients", label: "My Patients", icon: "👨‍⚕️" },
@@ -216,55 +450,12 @@ export default function AdminDashboard({ user, onLogout }) {
       {/* Main Content */}
       <div style={s.main}>
         <Navbar user={{ full_name: user.name, role: user.role }} onLogout={onLogout} />
+        {toast && (
+          <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "rgba(0,212,255,0.12)", border: "1px solid rgba(0,212,255,0.2)", borderRadius: 12, padding: "12px 20px", color: "#00d4ff", fontWeight: 600, fontSize: 13, backdropFilter: "blur(10px)" }}>{toast}</div>
+        )}
 
         <div style={{ padding: 40 }}>
-          {view === "patients" && (
-            <div style={s.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <h2 style={{ margin: 0 }}>{isSuper ? "Global Patient Records" : "My Assigned Patients"}</h2>
-                <div style={{ fontSize: 13, color: "#5a7aa0" }}>{patients.length} records found</div>
-              </div>
-
-              {loading ? <div style={{ color: "#00d4ff", fontFamily: "monospace" }}>Fetching cloud data...</div> : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ textAlign: "left", color: "#4a6a8a", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
-                        <th style={{ padding: 12 }}>ID</th>
-                        <th style={{ padding: 12 }}>Patient</th>
-                        <th style={{ padding: 12 }}>Spec / Doctor</th>
-                        <th style={{ padding: 12 }}>Priority</th>
-                        <th style={{ padding: 12 }}>Status</th>
-                        {!isSuper && <th style={{ padding: 12 }}>Action</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {patients.map(p => (
-                        <tr key={p.id} style={{ borderBottom: "1px solid #1e2d4a" }}>
-                          <td style={{ padding: 16, fontFamily: "monospace", color: "#00d4ff" }}>{p.patient_code}</td>
-                          <td style={{ padding: 16 }}>
-                            <div style={{ fontWeight: 600 }}>{p.name}</div>
-                            <div style={{ fontSize: 11, color: "#4a6a8a" }}>{p.age}y · {p.gender}</div>
-                          </td>
-                          <td style={{ padding: 16 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700 }}>{p.specialization_required}</div>
-                            <div style={{ fontSize: 11, color: "#5a7aa0" }}>👨‍⚕️ {p.doctor_name || "Unassigned"}</div>
-                          </td>
-                          <td style={{ padding: 16 }}><PriorityBadge priority={p.priority} /></td>
-                          <td style={{ padding: 16 }}><StatusBadge status={p.status} /></td>
-                          {!isSuper && (
-                            <td style={{ padding: 16 }}>
-                              <button onClick={() => { setSelectedPat(p); setDiagnosis(p.diagnosis || ""); setNotes(p.treatment_notes || ""); }} style={{ padding: "6px 14px", borderRadius: 8, background: "#00d4ff11", border: "1px solid #00d4ff44", color: "#00d4ff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Treat</button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+          {view === "patients" && <PatientWorkflowBoard />}
 
           {view === "add-patient" && isSuper && (
             <div style={{ maxWidth: 600, margin: "0 auto" }}>
@@ -276,6 +467,112 @@ export default function AdminDashboard({ user, onLogout }) {
             </div>
           )}
 
+          {view === "tickets" && isSuper && (() => {
+            const activeT = tickets.filter(t => t.status !== "RESOLVED");
+            const resolvedT = tickets.filter(t => t.status === "RESOLVED");
+            return (
+              <div>
+                <h2 style={{ color: "#e2eaf5", marginBottom: 20 }}>📩 All Tickets</h2>
+
+                {/* Active tickets */}
+                <div style={{ color: "#4a6a8a", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+                  Active ({activeT.length})
+                </div>
+                {activeT.length === 0 && <div style={{ color: "#5a7aa0", marginBottom: 20 }}>No open tickets. 🎉</div>}
+                {activeT.map(t => {
+                  const tColor = { OPEN: "#f59e0b", IN_PROGRESS: "#3b82f6" }[t.status] || "#888";
+                  return (
+                    <div key={t.id} style={{ ...s.card, marginBottom: 12, padding: 18 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{t.ticket_code} — <span style={{ color: "#00d4ff" }}>{t.department}</span></div>
+                          <div style={{ color: "#5a7aa0", fontSize: 12, marginTop: 4 }}>{t.query_text}</div>
+                          {t.assignee_name && <div style={{ color: "#4a6a8a", fontSize: 11, marginTop: 4 }}>Assigned to: {t.assignee_name}</div>}
+                          <div style={{ color: "#4a6a8a", fontSize: 11, marginTop: 2 }}>{new Date(t.created_at).toLocaleString()}</div>
+                        </div>
+                        <span style={{ background: `${tColor}20`, border: `1px solid ${tColor}50`, color: tColor, borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>{t.status}</span>
+                      </div>
+                      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          placeholder="Resolution notes…"
+                          style={{ flex: 1, padding: "8px 12px", borderRadius: 8, background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", fontSize: 12 }}
+                          value={ticketNotes[t.id] || ""}
+                          onChange={e => setTicketNotes(n => ({ ...n, [t.id]: e.target.value }))}
+                        />
+                        <button onClick={() => resolveTicket(t.id, ticketNotes[t.id])}
+                          style={{ padding: "8px 14px", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 8, color: "#22c55e", cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                          ✓ Resolve
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Resolved history */}
+                {resolvedT.length > 0 && (
+                  <div style={{ marginTop: 24, opacity: 0.6 }}>
+                    <div style={{ color: "#22c55e", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+                      ✅ Resolved History ({resolvedT.length})
+                    </div>
+                    {resolvedT.map(t => (
+                      <div key={t.id} style={{ ...s.card, marginBottom: 8, padding: 14, borderLeft: "3px solid rgba(34,197,94,0.4)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div>
+                            <div style={{ color: "#e2eaf5", fontWeight: 700, fontSize: 13 }}>{t.ticket_code} — <span style={{ color: "#00d4ff" }}>{t.department}</span></div>
+                            <div style={{ color: "#5a7aa0", fontSize: 12 }}>{t.query_text}</div>
+                            {t.notes && <div style={{ color: "#22c55e", fontSize: 11, marginTop: 4 }}>📝 {t.notes}</div>}
+                          </div>
+                          <span style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#22c55e", borderRadius: 8, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>RESOLVED</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── MOVEMENT LOGS ── */}
+          {view === "movement-logs" && isSuper && (
+            <div>
+              <h2 style={{ color: "#e2eaf5", marginBottom: 20 }}>📋 Movement Logs — Full Audit Trail</h2>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "#4a6a8a", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>
+                      <th style={{ padding: "10px 12px" }}>Time</th>
+                      <th style={{ padding: "10px 12px" }}>Type</th>
+                      <th style={{ padding: "10px 12px" }}>Ref ID</th>
+                      <th style={{ padding: "10px 12px" }}>From</th>
+                      <th style={{ padding: "10px 12px" }}>To</th>
+                      <th style={{ padding: "10px 12px" }}>Action</th>
+                      <th style={{ padding: "10px 12px" }}>Actor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {moveLogs.map(log => (
+                      <tr key={log.id} style={{ borderBottom: "1px solid #1e2d4a" }}>
+                        <td style={{ padding: "12px", fontSize: 11, color: "#5a7aa0" }}>{new Date(log.timestamp).toLocaleString()}</td>
+                        <td style={{ padding: "12px" }}>
+                          <span style={{ background: log.ref_type === "PATIENT" ? "rgba(0,212,255,0.1)" : "rgba(245,158,11,0.1)", color: log.ref_type === "PATIENT" ? "#00d4ff" : "#f59e0b", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>
+                            {log.ref_type}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px", fontFamily: "monospace", color: "#e2eaf5" }}>#{log.reference_id}</td>
+                        <td style={{ padding: "12px", fontSize: 12, color: "#5a7aa0" }}>{log.from_department || "—"}</td>
+                        <td style={{ padding: "12px", fontSize: 12, color: "#00d4ff", fontWeight: 600 }}>{log.to_department}</td>
+                        <td style={{ padding: "12px", fontSize: 12 }}>{log.action}</td>
+                        <td style={{ padding: "12px", fontSize: 12, color: "#a3e635" }}>{log.actor_name || "System"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {moveLogs.length === 0 && <div style={{ color: "#5a7aa0", marginTop: 20 }}>No movement logs yet. They appear when patients are assigned, tickets are created/resolved, etc.</div>}
+              </div>
+            </div>
+          )}
+
+          {/* ── STAFF ── */}
           {view === "staff" && isSuper && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
               <div style={s.card}>
@@ -290,7 +587,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <h3 style={{ marginTop: 0 }}>Staff Roster</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
                   <div>
-                    <h4 style={{ fontSize: 12, color: "#4a6a8a", textTransform: "uppercase" }}>Doctors</h4>
+                    <h4 style={{ fontSize: 12, color: "#4a6a8a", textTransform: "uppercase" }}>Doctors ({doctors.length})</h4>
                     {doctors.map(d => (
                       <div key={d.id} style={{ background: "#060b14", padding: 12, borderRadius: 10, marginBottom: 8, border: "1px solid #1e2d4a" }}>
                         <div style={{ fontWeight: 700 }}>{d.full_name}</div>
@@ -300,7 +597,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     ))}
                   </div>
                   <div>
-                    <h4 style={{ fontSize: 12, color: "#4a6a8a", textTransform: "uppercase" }}>Nurses</h4>
+                    <h4 style={{ fontSize: 12, color: "#4a6a8a", textTransform: "uppercase" }}>Nurses ({nurses.length})</h4>
                     {nurses.map(n => (
                       <div key={n.id} style={{ background: "#060b14", padding: 12, borderRadius: 10, marginBottom: 8, border: "1px solid #1e2d4a" }}>
                         <div style={{ fontWeight: 700 }}>{n.full_name}</div>
@@ -313,33 +610,33 @@ export default function AdminDashboard({ user, onLogout }) {
             </div>
           )}
         </div>
-      </div>
 
-      {/* Treatment Modal */}
-      {selectedPat && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(8px)" }}>
-          <div style={{ ...s.card, width: "100%", maxWidth: 640 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <h2 style={{ margin: 0 }}>Treat Patient: {selectedPat.name}</h2>
-                <div style={{ fontSize: 13, color: "#5a7aa0", marginTop: 4 }}>Complaint: "{selectedPat.complaint}"</div>
+        {/* Treatment Modal */}
+        {selectedPat && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(8px)" }}>
+            <div style={{ ...s.card, width: "100%", maxWidth: 640 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>Treat Patient: {selectedPat.name}</h2>
+                  <div style={{ fontSize: 13, color: "#5a7aa0", marginTop: 4 }}>Complaint: "{selectedPat.complaint}"</div>
+                </div>
+                <button onClick={() => setSelectedPat(null)} style={{ background: "none", border: "none", color: "#ef4444", fontWeight: 900, fontSize: 24, cursor: "pointer" }}>&times;</button>
               </div>
-              <button onClick={() => setSelectedPat(null)} style={{ background: "none", border: "none", color: "#ef4444", fontWeight: 900, fontSize: 24, cursor: "pointer" }}>&times;</button>
-            </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Final Diagnosis</label>
-              <textarea style={{ width: "100%", minHeight: 80, background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: 12, borderRadius: 10, outline: "none", resize: "none" }} value={diagnosis} onChange={e => setDiagnosis(e.target.value)} placeholder="Enter medical diagnosis..." />
-            </div>
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Treatment & Prescription Notes</label>
-              <textarea style={{ width: "100%", minHeight: 120, background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: 12, borderRadius: 10, outline: "none", resize: "none" }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Next steps, medications, etc..." />
-            </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Final Diagnosis</label>
+                <textarea style={{ width: "100%", minHeight: 80, background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: 12, borderRadius: 10, outline: "none", resize: "none" }} value={diagnosis} onChange={e => setDiagnosis(e.target.value)} placeholder="Enter medical diagnosis..." />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Treatment & Prescription Notes</label>
+                <textarea style={{ width: "100%", minHeight: 120, background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: 12, borderRadius: 10, outline: "none", resize: "none" }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Next steps, medications, etc..." />
+              </div>
 
-            <button onClick={handleUpdate} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#00d4ff", color: "#000", fontWeight: 800, border: "none", cursor: "pointer" }}>✅ Complete Consultation</button>
+              <button onClick={handleUpdate} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#00d4ff", color: "#000", fontWeight: 800, border: "none", cursor: "pointer" }}>✅ Complete Consultation</button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

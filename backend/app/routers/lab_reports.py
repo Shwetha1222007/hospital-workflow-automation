@@ -13,6 +13,7 @@ from app.models.user import User, UserRole
 from app.models.workflow import WorkflowLog, WorkflowStage, WorkflowStatus
 from app.core.dependencies import get_current_user, require_lab_tech, require_doctor
 from app.config import settings
+from app.models.movement_log import log_movement, LogColor
 
 router = APIRouter()
 
@@ -33,6 +34,8 @@ class LabReportOut(BaseModel):
     doctor_id: int
     labtech_id: Optional[int] = None
     test_type: str
+    test_name: Optional[str] = None    # alias of test_type for frontend
+    file_name: Optional[str] = None    # derived from file_path
     status: str
     file_path: Optional[str] = None
     file_type: Optional[str] = None
@@ -42,6 +45,17 @@ class LabReportOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        instance = super().model_validate(obj, **kwargs)
+        # Populate alias fields from actual DB columns
+        if instance.test_name is None:
+            instance.test_name = instance.test_type
+        if instance.file_name is None and instance.file_path:
+            import os as _os
+            instance.file_name = _os.path.basename(instance.file_path)
+        return instance
 
 
 class StatusUpdate(BaseModel):
@@ -78,10 +92,11 @@ def get_reports(
     """
     q = db.query(LabReport)
 
-    if current_user.role == UserRole.LAB_TECHNICIAN:
-        q = q.filter(LabReport.labtech_id == current_user.id)
-    elif current_user.role == UserRole.DOCTOR:
+    # Doctors only see their own prescriptions
+    if current_user.role == UserRole.DOCTOR:
         q = q.filter(LabReport.doctor_id == current_user.id)
+    # Lab tech sees ALL reports (so they can act on any incoming test)
+    # elif current_user.role == UserRole.LAB_TECHNICIAN: (no filter - see all)
 
     if status:
         q = q.filter(LabReport.status == status.upper())
@@ -125,7 +140,7 @@ def prescribe_tests(
         db.commit() # commit each to get unique codes if generator is based on DB count
         db.refresh(report)
 
-    # Log workflow transition
+    # Log workflow transition — LAB PRESCRIBED (RED: waiting for lab)
     if patient_id:
         log = WorkflowLog(
             patient_id = patient_id,
@@ -135,15 +150,97 @@ def prescribe_tests(
             notes      = f"Prescribed {len(added)} tests. Stage moved to LAB."
         )
         db.add(log)
-        
-        # Update patient status for convenience
+
         p = db.query(Patient).filter(Patient.id == patient_id).first()
+        test_names = ", ".join(r.test_type for r in added)
         if p:
             p.status = "LAB_IN_PROGRESS"
-        
+            log_movement(
+                db,
+                patient_id   = patient_id,
+                reference_id = patient_id,
+                ref_type     = "LAB",
+                from_dept    = "DOCTOR",
+                to_dept      = "LAB",
+                action       = f"🔬 Test(s) prescribed: {test_names} — awaiting lab",
+                updated_by   = current_user.id,
+                status       = "PENDING",
+                color_code   = LogColor.RED,
+            )
         db.commit()
 
     return added
+
+
+
+# ── POST /upload — Lab Tech: create + upload in one step ─────────────────────
+
+@router.post("/upload", response_model=LabReportOut, status_code=201)
+async def upload_new_lab_report(
+    patient_code: str          = Form(...),
+    test_name:    str          = Form(...),
+    notes:        Optional[str] = Form(None),
+    file:         UploadFile   = File(...),
+    db:           Session      = Depends(get_db),
+    current_user: User         = Depends(require_lab_tech),
+):
+    """
+    Lab Technician: Create a new lab report and upload the file in a single request.
+    Accepts patient_code + test_name + file.
+    """
+    # Find patient by code
+    patient = db.query(Patient).filter(Patient.patient_code == patient_code).first()
+    if not patient:
+        raise HTTPException(404, f"Patient '{patient_code}' not found")
+
+    # Validate file type
+    allowed = ["application/pdf", "image/jpeg", "image/png", "image/jpg"]
+    content_type = file.content_type or ""
+    if content_type not in allowed:
+        raise HTTPException(400, "Only PDF and image files (JPG, PNG) are allowed")
+
+    # Save file
+    code = generate_report_code(db)
+    ext  = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
+    safe_filename = f"{code}_report{ext}"
+    file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
+    with open(file_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    file_type = "pdf" if "pdf" in content_type else "image"
+
+    # Create LabReport record
+    report = LabReport(
+        report_code = code,
+        patient_id  = patient.id,
+        doctor_id   = patient.doctor_id or 1,   # fallback to admin if no doctor
+        labtech_id  = current_user.id,
+        test_type   = test_name,
+        status      = LabStatus.COMPLETED,
+        file_path   = file_path,
+        file_type   = file_type,
+        notes       = notes,
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    # Log movement — lab report uploaded
+    log_movement(
+        db,
+        patient_id   = patient.id,
+        reference_id = report.id,
+        ref_type     = "LAB",
+        from_dept    = "LAB",
+        to_dept      = "DOCTOR",
+        action       = f"🔬 Lab Report Uploaded: {test_name} ({code}) — by {current_user.full_name}",
+        updated_by   = current_user.id,
+        status       = "COMPLETED",
+        color_code   = LogColor.GREEN,
+    )
+    db.commit()
+
+    return report
 
 
 # ── POST /{id}/upload — Lab Technician only ──────────────────────────────────
@@ -193,30 +290,57 @@ async def upload_lab_report(
     ).count() == 1 # 1 because current one is about to be committed? No, count first then update.
     # Actually, let's just count after committing.
 
+    # Check if all tests for patient done
     db.commit()
     db.refresh(report)
-    
-    # Check workflow
+
     remaining = db.query(LabReport).filter(
-        LabReport.patient_id == report.patient_id, 
-        LabReport.status != LabStatus.COMPLETED
+        LabReport.patient_id == report.patient_id,
+        LabReport.status     != LabStatus.COMPLETED
     ).count()
-    
+
+    p = db.query(Patient).filter(Patient.id == report.patient_id).first()
+
     if remaining == 0:
-        log = WorkflowLog(
+        wlog = WorkflowLog(
             patient_id = report.patient_id,
             stage      = WorkflowStage.DOCTOR,
             status     = WorkflowStatus.COMPLETED,
             updated_by = current_user.id,
             notes      = "All lab tests completed. Returned to Doctor."
         )
-        db.add(log)
-        
-        p = db.query(Patient).filter(Patient.id == report.patient_id).first()
+        db.add(wlog)
         if p:
             p.status = "LAB_COMPLETED"
-        db.commit()
 
+        log_movement(
+            db,
+            patient_id   = report.patient_id,
+            reference_id = report.id,
+            ref_type     = "LAB",
+            from_dept    = "LAB",
+            to_dept      = "DOCTOR",
+            action       = f"✅ Lab report uploaded: {report.test_type} ({report.report_code})",
+            updated_by   = current_user.id,
+            status       = "COMPLETED",
+            color_code   = LogColor.GREEN,
+        )
+    else:
+        # Partial upload — still in progress
+        log_movement(
+            db,
+            patient_id   = report.patient_id,
+            reference_id = report.id,
+            ref_type     = "LAB",
+            from_dept    = "LAB",
+            to_dept      = "LAB",
+            action       = f"📄 Report uploaded: {report.test_type} ({report.report_code}) — {remaining} test(s) remaining",
+            updated_by   = current_user.id,
+            status       = "IN_PROGRESS",
+            color_code   = LogColor.YELLOW,
+        )
+
+    db.commit()
     return report
 
 
@@ -244,18 +368,29 @@ def update_status(
     if data.notes:
         report.notes = data.notes
     report.updated_at = datetime.utcnow()
-    
-    # Update workflow log if it's In Progress
+
     if new_status == LabStatus.IN_PROGRESS:
-        log = WorkflowLog(
-            patient_id = report.patient_id,
-            stage      = WorkflowStage.LAB,
-            status     = WorkflowStatus.IN_PROGRESS,
+        wlog = WorkflowLog(
+            patient_id       = report.patient_id,
+            stage            = WorkflowStage.LAB,
+            status           = WorkflowStatus.IN_PROGRESS,
             assigned_user_id = current_user.id,
-            updated_by = current_user.id,
-            notes      = f"Test {report.test_type} is now in progress."
+            updated_by       = current_user.id,
+            notes            = f"Test {report.test_type} is now in progress."
         )
-        db.add(log)
+        db.add(wlog)
+        log_movement(
+            db,
+            patient_id   = report.patient_id,
+            reference_id = report.id,
+            ref_type     = "LAB",
+            from_dept    = "LAB",
+            to_dept      = "LAB",
+            action       = f"⏳ Lab test in progress: {report.test_type} ({report.report_code})",
+            updated_by   = current_user.id,
+            status       = "IN_PROGRESS",
+            color_code   = LogColor.YELLOW,
+        )
 
     db.commit()
     db.refresh(report)

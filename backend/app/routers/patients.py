@@ -9,6 +9,8 @@ from app.models.doctor  import Doctor
 from app.models.nurse   import Nurse
 from app.models.user    import User, UserRole
 from app.models.workflow import WorkflowLog, WorkflowStage, WorkflowStatus
+from app.models.patient_user import PatientUser
+from app.models.movement_log import MovementLog, log_movement, LogColor
 from app.core.dependencies import get_current_user, require_super_admin
 
 router = APIRouter()
@@ -128,6 +130,80 @@ def search_patients(
     return [_enrich(p) for p in results]
 
 
+# ── GET /admin-table — Admin-only: patient table with stage & time-in-stage ────
+
+class AdminTableRow(BaseModel):
+    patient_id:      int
+    patient_code:    str
+    name:            str
+    priority:        Optional[str] = None
+    doctor_name:     Optional[str] = None
+    nurse_name:      Optional[str] = None
+    current_stage:   str
+    stage_color:     str
+    time_in_stage_mins: int
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/admin-table", response_model=List[AdminTableRow])
+def get_admin_table(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_super_admin),
+):
+    """
+    Admin-only: one row per patient showing current workflow stage
+    (last movement log), time-in-stage, doctor, and assigned nurse.
+    """
+    from app.models.movement_log import MovementLog
+    from sqlalchemy import func
+
+    patients = db.query(Patient).order_by(Patient.id.desc()).all()
+    rows = []
+    for p in patients:
+        # Get last movement log for this patient
+        last_log = (
+            db.query(MovementLog)
+            .filter(MovementLog.patient_id == p.id)
+            .order_by(MovementLog.timestamp.desc())
+            .first()
+        )
+        if last_log:
+            current_stage = last_log.action
+            stage_color = last_log.color_code or "YELLOW"
+            # time since last log
+            delta = datetime.utcnow() - last_log.timestamp
+            time_mins = int(delta.total_seconds() / 60)
+        else:
+            current_stage = "Patient Registered"
+            stage_color = "GREEN"
+            time_mins = 0
+
+        # Doctor name
+        doc_name = p.doctor.user.full_name if p.doctor and p.doctor.user else "Unassigned"
+
+        # Nurse assigned to this doctor
+        nurse_name = "Unassigned"
+        if p.doctor_id:
+            nurse = db.query(Nurse).filter(Nurse.doctor_id == p.doctor_id).first()
+            if nurse and nurse.user:
+                nurse_name = nurse.user.full_name
+
+        rows.append(AdminTableRow(
+            patient_id         = p.id,
+            patient_code       = p.patient_code,
+            name               = p.name,
+            priority           = p.priority,
+            doctor_name        = doc_name,
+            nurse_name         = nurse_name,
+            current_stage      = current_stage,
+            stage_color        = stage_color,
+            time_in_stage_mins = time_mins,
+        ))
+    return rows
+
+
 # ── GET /{code} ───────────────────────────────────────────────────────────────
 
 @router.get("/{patient_code}", response_model=PatientOut)
@@ -195,8 +271,37 @@ def create_patient(
         notes            = f"Patient registered. Assigned to specialization: {spec}"
     )
     db.add(initial_log)
-    db.commit()
 
+    # Movement log — Registration (GREEN: patient record created)
+    log_movement(
+        db,
+        patient_id   = patient.id,
+        reference_id = patient.id,
+        ref_type     = "PATIENT",
+        from_dept    = "REGISTRATION",
+        to_dept      = spec,
+        action       = f"🏥 Patient {patient.patient_code} ({patient.name}) registered — {priority} priority",
+        updated_by   = current_user.id,
+        status       = "COMPLETED",
+        color_code   = LogColor.GREEN,
+    )
+
+    # Movement log — Doctor Assignment (BLUE: assigned)
+    if assigned_doctor and assigned_doctor.user:
+        log_movement(
+            db,
+            patient_id   = patient.id,
+            reference_id = patient.id,
+            ref_type     = "PATIENT",
+            from_dept    = spec,
+            to_dept      = "DOCTOR",
+            action       = f"👨‍⚕️ Assigned to Dr. {assigned_doctor.user.full_name} ({spec})",
+            updated_by   = current_user.id,
+            status       = "ASSIGNED",
+            color_code   = LogColor.BLUE,
+        )
+
+    db.commit()
     return _enrich(patient)
 
 
@@ -225,14 +330,28 @@ def update_patient(
         if data.status          is not None: p.status          = data.status.upper()
 
         if data.status and data.status.upper() != old_status:
+            is_done = data.status.upper() == "COMPLETED"
             log = WorkflowLog(
                 patient_id = p.id,
                 stage      = WorkflowStage.DOCTOR,
-                status     = WorkflowStatus.COMPLETED if data.status.upper() == "COMPLETED" else WorkflowStatus.IN_PROGRESS,
+                status     = WorkflowStatus.COMPLETED if is_done else WorkflowStatus.IN_PROGRESS,
                 updated_by = current_user.id,
-                notes      = f"Doctor updated status from {old_status} to {p.status}"
+                notes      = f"Doctor updated status: {old_status} → {p.status}"
             )
             db.add(log)
+            log_movement(
+                db,
+                patient_id   = p.id,
+                reference_id = p.id,
+                ref_type     = "PATIENT",
+                from_dept    = "DOCTOR",
+                to_dept      = "DOCTOR",
+                action       = (f"✅ Treatment completed by Dr. {current_user.full_name}" if is_done
+                                else f"💊 Treatment in progress — Dr. {current_user.full_name}"),
+                updated_by   = current_user.id,
+                status       = "COMPLETED" if is_done else "IN_PROGRESS",
+                color_code   = LogColor.GREEN if is_done else LogColor.YELLOW,
+            )
 
     elif current_user.role == UserRole.NURSE:
         nurse = _get_nurse(current_user, db)
@@ -280,6 +399,40 @@ def delete_patient(
     db.commit()
 
 
+# ── POST /{code}/consultation — Nurse marks consultation done ─────────────────
+
+@router.post("/{patient_code}/consultation", response_model=PatientOut)
+def mark_consultation(
+    patient_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Nurse marks patient consultation as completed."""
+    if current_user.role not in [UserRole.NURSE, UserRole.SUPER_ADMIN]:
+        raise HTTPException(403, "Only nurses or admin can mark consultation")
+    p = db.query(Patient).filter(Patient.patient_code == patient_code).first()
+    if not p:
+        raise HTTPException(404, f"Patient {patient_code} not found")
+
+    p.status = "IN_PROGRESS"
+    log_movement(
+        db,
+        patient_id   = p.id,
+        reference_id = p.id,
+        ref_type     = "PATIENT",
+        from_dept    = "NURSE",
+        to_dept      = "DOCTOR",
+        action       = f"🩺 Consultation completed by Nurse {current_user.full_name}",
+        updated_by   = current_user.id,
+        status       = "COMPLETED",
+        color_code   = LogColor.GREEN,
+    )
+    db.commit()
+    db.refresh(p)
+    return _enrich(p)
+
+
+
 @router.get("/{patient_code}/workflow", response_model=List[WorkflowLogOut])
 def get_patient_workflow(
     patient_code: str,
@@ -293,3 +446,19 @@ def get_patient_workflow(
     
     logs = db.query(WorkflowLog).filter(WorkflowLog.patient_id == p.id).order_by(WorkflowLog.timestamp.asc()).all()
     return logs
+
+
+# ── GET /me — Patient views their own record ─────────────────────────────────
+
+@router.get("/me/profile", response_model=PatientOut)
+def get_my_patient_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Patient-role user views their own patient record."""
+    if current_user.role != UserRole.PATIENT:
+        raise HTTPException(403, "This endpoint is for patients only")
+    link = db.query(PatientUser).filter(PatientUser.user_id == current_user.id).first()
+    if not link or not link.patient:
+        raise HTTPException(404, "No patient record linked to your account")
+    return _enrich(link.patient)

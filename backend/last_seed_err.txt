@@ -1,0 +1,64 @@
+﻿python : (trapped) error reading bcrypt version
+At line:1 char:1
++ python seed.py 2>&1 | Out-File -FilePath last_seed_err.txt -Encoding  ...
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((trapped) error reading bcrypt version:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Traceback (most recent call last):
+  File "C:\Users\sricb\miniconda3\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+C:\Users\sricb\OneDrive\Desktop\vit\hospital-workflow-automation\backend\seed.py:153: DeprecationWarning: 
+datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to 
+represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  resolved_at = __import__("datetime").datetime.utcnow() if status == "RESOLVED" else None,
+Seeding MedFlow v4 database...
+  Doctor: Dr. Rajesh Sharma -- CARDIOLOGIST
+  Doctor: Dr. Anita Patel -- ORTHOPEDIC
+  Doctor: Dr. Krishna Iyer -- NEUROLOGIST
+  Doctor: Dr. Meena Gupta -- GENERAL
+  Nurse: Nurse Priya -> Dr. Rajesh Sharma
+  Nurse: Nurse Kavya -> Dr. Rajesh Sharma
+  Nurse: Nurse Sunita -> Dr. Anita Patel
+  Nurse: Nurse Rekha -> Dr. Anita Patel
+  Nurse: Nurse Deepa -> Dr. Krishna Iyer
+  Nurse: Nurse Anjali -> Dr. Krishna Iyer
+  Nurse: Nurse Pooja -> Dr. Meena Gupta
+  Nurse: Nurse Sneha -> Dr. Meena Gupta
+  Lab Tech: Lab Tech Priya
+  Patient: PAT001 Arjun Sharma -> CARDIOLOGIST (Dr. Rajesh Sharma)
+  Patient: PAT002 Priya Mehta -> ORTHOPEDIC (Dr. Anita Patel)
+  Patient: PAT003 Ravi Nair -> NEUROLOGIST (Dr. Krishna Iyer)
+  Patient: PAT004 Latha Iyer -> GENERAL (Dr. Meena Gupta)
+  Patient: PAT005 Suresh Kumar -> CARDIOLOGIST (Dr. Rajesh Sharma)
+  Patient: PAT006 Ananya Rao -> ORTHOPEDIC (Dr. Anita Patel)
+  Patient: PAT007 Mohan Verma -> NEUROLOGIST (Dr. Krishna Iyer)
+  Patient: PAT008 Meena Das -> GENERAL (Dr. Meena Gupta)
+  Ticket: TKT001 [LAB] [RESOLVED] - 'I need my blood test report urgently...'
+  Ticket: TKT002 [DOCTOR] [OPEN] - 'When will my doctor be available for che...'
+  Ticket: TKT003 [BILLING] [OPEN] - 'I have a billing issue with my last invo...'
+  Ticket: TKT004 [DOCTOR] [IN_PROGRESS] - 'My fever is not going away, need doctor ...'
+  Ticket: TKT005 [LAB] [OPEN] - 'Can I get my ECG lab test report?...'
+
+Database seeded successfully!
+
+LOGIN CREDENTIALS:
+  Super Admin  : admin@medflow.com       / admin123
+  Cardiologist : dr.sharma@medflow.com   / doc123
+  Orthopedic   : dr.patel@medflow.com    / doc123
+  Neurologist  : dr.krishna@medflow.com  / doc123
+  General Dr   : dr.gupta@medflow.com    / doc123
+  Nurse (Card) : nurse.priya@medflow.com / nurse123
+  Lab Tech     : lab@medflow.com         / lab123
+
+  PATIENT LOGINS (username = patient_code, password = patient_code):
+    PAT001    /  PAT001  (Arjun Sharma)
+    PAT002    /  PAT002  (Priya Mehta)
+    PAT003    /  PAT003  (Ravi Nair)
+    PAT004    /  PAT004  (Latha Iyer)
+    PAT005    /  PAT005  (Suresh Kumar)
+    PAT006    /  PAT006  (Ananya Rao)
+    PAT007    /  PAT007  (Mohan Verma)
+    PAT008    /  PAT008  (Meena Das)
