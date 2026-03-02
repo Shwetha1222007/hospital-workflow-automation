@@ -12,6 +12,10 @@ class UserRole(str, enum.Enum):
     LAB_TECHNICIAN  = "LAB_TECHNICIAN"
     PHARMACIST      = "PHARMACIST"
     BILLING         = "BILLING"
+<<<<<<< HEAD
+=======
+    PATIENT         = "PATIENT"
+>>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
 
 
 class User(Base):
@@ -27,5 +31,6 @@ class User(Base):
 
     doctor_profile          = relationship("Doctor", back_populates="user", uselist=False)
     nurse_profile           = relationship("Nurse",  back_populates="user", uselist=False)
+    patient_profile         = relationship("PatientUser", back_populates="user", uselist=False)
     lab_reports_assigned    = relationship("LabReport", foreign_keys="LabReport.labtech_id", back_populates="lab_technician")
     lab_reports_prescribed  = relationship("LabReport", foreign_keys="LabReport.doctor_id",  back_populates="prescribing_doctor")

@@ -4,6 +4,10 @@ import LoginPage from "./pages/LoginPage";
 import LabDashboard from "./pages/LabDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import NurseDashboard from "./pages/NurseDashboard";
+<<<<<<< HEAD
+=======
+import DoctorDashboard from "./pages/DoctorDashboard";
+>>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
 import PatientDashboard from "./pages/PatientDashboard";
 import PharmacyDashboard from "./pages/PharmacyDashboard";
 import BillingDashboard from "./pages/BillingDashboard";
@@ -38,15 +42,21 @@ function AppInner() {
   if (!currentRole) return <LoginPage onLogin={handleLogin} />;
 
   const userData = {
-    name: user?.full_name || localStorage.getItem("name") || "Hospital Staff",
+    name: user?.full_name || localStorage.getItem("name") || "User",
     role: currentRole,
     id: user?.id,
     extra: user,
   };
 
+<<<<<<< HEAD
+=======
+  if (currentRole === "PATIENT") return <PatientDashboard user={userData} onLogout={handleLogout} />;
+>>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
   if (currentRole === "LAB_TECHNICIAN") return <LabDashboard onLogout={handleLogout} />;
+  if (currentRole === "PHARMACIST") return <PharmacyDashboard onLogout={handleLogout} />;
+  if (currentRole === "BILLING") return <BillingDashboard onLogout={handleLogout} />;
   if (currentRole === "SUPER_ADMIN") return <AdminDashboard user={userData} onLogout={handleLogout} />;
-  if (currentRole === "DOCTOR") return <AdminDashboard user={userData} onLogout={handleLogout} />;
+  if (currentRole === "DOCTOR") return <DoctorDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "NURSE") return <NurseDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "PHARMACIST") return <PharmacyDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "BILLING") return <BillingDashboard user={userData} onLogout={handleLogout} />;

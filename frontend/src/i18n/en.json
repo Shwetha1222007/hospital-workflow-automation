@@ -1,0 +1,90 @@
+{
+  "nav": {
+    "profile": "My Profile",
+    "treatment": "Treatment",
+    "lab": "Lab Reports",
+    "tickets": "My Tickets",
+    "timeline": "Timeline"
+  },
+  "header": {
+    "portal": "Patient Portal",
+    "signOut": "Sign Out"
+  },
+  "profile": {
+    "title": "My Profile",
+    "name": "Name",
+    "patientId": "Patient ID",
+    "age": "Age",
+    "years": "years",
+    "gender": "Gender",
+    "phone": "Phone",
+    "priority": "Priority",
+    "complaint": "Complaint",
+    "assignedDoctor": "Assigned Doctor",
+    "specialization": "Specialization"
+  },
+  "treatment": {
+    "title": "Treatment Progress",
+    "currentStatus": "Current Status",
+    "diagnosis": "Diagnosis",
+    "treatmentNotes": "Treatment Notes",
+    "awaitingDiagnosis": "Awaiting diagnosis from doctor...",
+    "noNotes": "No treatment notes yet. Your doctor will update this section.",
+    "workflowProgress": "Workflow Progress",
+    "steps": {
+      "registered": "Registered",
+      "doctorReview": "Doctor Review",
+      "labTests": "Lab Tests",
+      "completed": "Completed"
+    }
+  },
+  "lab": {
+    "title": "Lab Reports",
+    "noTests": "No lab tests prescribed yet.",
+    "prescribed": "Prescribed",
+    "downloadReport": "Download Report",
+    "reportPending": "Report pending. Lab technician is working on it."
+  },
+  "tickets": {
+    "title": "My Support Tickets",
+    "newQuery": "Raise a New Query",
+    "placeholder": "Describe your issue (e.g. need lab report, billing query...)",
+    "submit": "Submit",
+    "autoRouteHint": "Ticket is auto-routed to the right department based on your query. Or use the chatbot (bottom right) for instant help!",
+    "noTickets": "No tickets yet. Raise a query above!",
+    "assignedTo": "Assigned to",
+    "resolved": "Resolved",
+    "issueAddressed": "Issue addressed"
+  },
+  "timeline": {
+    "title": "Workflow Timeline",
+    "subtitle": "Your complete hospital journey",
+    "noLogs": "No movement logs yet. They will appear as your treatment progresses.",
+    "from": "From",
+    "to": "To",
+    "actor": "By"
+  },
+  "status": {
+    "PENDING": "Pending",
+    "IN_PROGRESS": "In Progress",
+    "COMPLETED": "Completed",
+    "LAB_IN_PROGRESS": "Lab In Progress",
+    "LAB_COMPLETED": "Lab Completed",
+    "OPEN": "Open",
+    "RESOLVED": "Resolved",
+    "EMERGENCY": "Emergency",
+    "NORMAL": "Normal"
+  },
+  "chatbot": {
+    "title": "MedBot Assistant",
+    "subtitle": "Powered by Groq AI • Always here to help",
+    "placeholder": "Type your query...",
+    "send": "Send",
+    "thinking": "MedBot is thinking",
+    "raiseTicket": "Raise Support Ticket",
+    "greeting": "👋 Hi! I'm MedBot. How can I help you today? Ask me about your treatment, lab reports, or any hospital queries!",
+    "ticketCreated": "Ticket created",
+    "dept": "dept",
+    "error": "Sorry, I'm having trouble connecting right now. Please try again."
+  }
+}
