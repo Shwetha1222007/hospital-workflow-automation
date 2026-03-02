@@ -10,6 +10,8 @@ class UserRole(str, enum.Enum):
     DOCTOR          = "DOCTOR"
     NURSE           = "NURSE"
     LAB_TECHNICIAN  = "LAB_TECHNICIAN"
+    PHARMACIST      = "PHARMACIST"
+    BILLING         = "BILLING"
     PATIENT         = "PATIENT"
 
 

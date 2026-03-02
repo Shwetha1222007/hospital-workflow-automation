@@ -73,6 +73,7 @@ export default function NurseDashboard({ user, onLogout }) {
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState("ALL");
     const [expandedTimeline, setExpandedTimeline] = useState(null);
+    const [labAssign, setLabAssign] = useState({}); // { patientId: "blood test, ecg" }
     const [toast, setToast] = useState("");
 
     const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
@@ -100,7 +101,6 @@ export default function NurseDashboard({ user, onLogout }) {
             await authAxios().post("/movement-logs/nurse-action", { patient_id: patientId, action });
             showToast(`✅ Logged: ${action}`);
             fetchData();
-            // Refresh timeline if open
             if (expandedTimeline === patientId) {
                 setExpandedTimeline(null);
                 setTimeout(() => setExpandedTimeline(patientId), 50);
@@ -108,12 +108,23 @@ export default function NurseDashboard({ user, onLogout }) {
         } catch (err) { showToast("❌ " + (err?.response?.data?.detail || "Action failed")); }
     };
 
+    const assignLabTests = async (p) => {
+        const tests = (labAssign[p.id] || "").split(",").map(t => t.trim()).filter(Boolean);
+        if (tests.length === 0) return showToast("⚠️ Enter at least one test");
+        try {
+            await authAxios().post("/lab-reports/assign", tests.map(t => ({ patient_id: p.id, test_type: t })));
+            showToast(`✅ ${tests.length} Lab Test(s) Assigned`);
+            setLabAssign(prev => ({ ...prev, [p.id]: "" }));
+            fetchData();
+        } catch (err) { showToast("❌ " + (err?.response?.data?.detail || "Assignment failed")); }
+    };
+
     const filtered = patients.filter(p => filterStatus === "ALL" || p.status === filterStatus);
 
     const s = {
         wrap: { minHeight: "100vh", background: "#060b14", color: "#e2eaf5", fontFamily: "'DM Sans', sans-serif" },
         container: { maxWidth: 1100, margin: "0 auto", padding: 40 },
-        card: { background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 14, marginBottom: 16, overflow: "hidden" },
+        card: { background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 14, marginBottom: 16 },
         header: { display: "flex", alignContent: "center", justifyContent: "space-between", padding: "18px 32px", background: "rgba(0,0,0,0.4)", borderBottom: "1px solid #1e2d4a" },
     };
 
@@ -157,8 +168,8 @@ export default function NurseDashboard({ user, onLogout }) {
                             No patients with status {filterStatus}
                         </div>
                     ) : (
-                        filtered.map(p => (
-                            <div key={p.id} style={s.card}>
+                        filtered.map((p, idx) => (
+                            <div key={p.id} style={{ ...s.card, position: "relative", zIndex: labAssign.open === p.id ? 100 : (filtered.length - idx) }}>
                                 {/* Patient Row */}
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", alignItems: "center", padding: "18px 20px", gap: 16 }}>
                                     <div>
@@ -176,28 +187,94 @@ export default function NurseDashboard({ user, onLogout }) {
                                         <div style={{ marginTop: 6 }}><StatusBadge status={p.status} /></div>
                                     </div>
 
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                        {/* Nurse workflow action buttons */}
-                                        {p.status === "PENDING" && (
-                                            <button onClick={() => { updateStatus(p.patient_code, "IN_PROGRESS"); nurseAction(p.id, "🏥 Patient Arrived — Consultation Started"); }}
-                                                style={{ padding: "8px 14px", borderRadius: 8, background: "#f59e0b11", border: "1px solid #f59e0b44", color: "#f59e0b", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                                                ✔ Mark Patient Arrived
-                                            </button>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }}>
+                                        {/* Red Alert if Lab Pending */}
+                                        {p.status === "LAB_PENDING" && (
+                                            <div style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, background: "rgba(239,68,68,0.1)", padding: "4px 8px", borderRadius: 4, marginBottom: 4 }}>
+                                                🚨 Doctor Requested Lab Tests
+                                            </div>
                                         )}
-                                        {p.status === "IN_PROGRESS" && (
-                                            <button onClick={() => nurseAction(p.id, "📋 Report Received & Verified by Nurse")}
-                                                style={{ padding: "8px 14px", borderRadius: 8, background: "#3b82f611", border: "1px solid #3b82f644", color: "#3b82f6", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                                                📋 Mark Report Received
-                                            </button>
-                                        )}
-                                        {p.status === "IN_PROGRESS" && (
-                                            <button onClick={() => { updateStatus(p.patient_code, "COMPLETED"); nurseAction(p.id, "✅ Consultation Completed by Nurse"); }}
-                                                style={{ padding: "8px 14px", borderRadius: 8, background: "#22c55e11", border: "1px solid #22c55e44", color: "#22c55e", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                                                ✅ Mark Completed
-                                            </button>
-                                        )}
-                                        {p.status === "COMPLETED" && (
-                                            <div style={{ fontSize: 11, color: "#22c55e", fontWeight: 700 }}>✔ All Done</div>
+
+                                        <button onClick={() => setLabAssign(prev => ({ ...prev, open: prev.open === p.id ? null : p.id }))}
+                                            style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg,#f59e0b,#ea580c)", border: "none", color: "#000", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                                            🛠 Add Workflow Step {labAssign.open === p.id ? "▲" : "▼"}
+                                        </button>
+
+                                        {labAssign.open === p.id && (
+                                            <div style={{ position: "absolute", top: "110%", right: 0, width: 280, background: "#060b14", border: "1px solid #1e2d4a", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8, zIndex: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
+
+                                                <button onClick={() => { updateStatus(p.patient_code, "IN_PROGRESS"); nurseAction(p.id, "🏥 Patient Arrived"); }}
+                                                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e2d4a", color: "#e2eaf5", padding: "8px", borderRadius: 6, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                                                    ✔ Mark Patient Arrived
+                                                </button>
+
+                                                <button onClick={() => { updateStatus(p.patient_code, "COMPLETED"); nurseAction(p.id, "✅ Consultation Completed"); }}
+                                                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e2d4a", color: "#e2eaf5", padding: "8px", borderRadius: 6, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                                                    ✅ Mark Consultation Completed
+                                                </button>
+
+                                                <div style={{ borderTop: "1px solid #1e2d4a", paddingTop: 8, marginTop: 4 }}>
+                                                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 6, fontWeight: 700 }}>ADD LAB TEST</div>
+                                                    <input
+                                                        placeholder="e.g. Blood Test, ECG, Scan"
+                                                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #1e2d4a", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12, marginBottom: 6 }}
+                                                        value={labAssign[p.id] || ""}
+                                                        onChange={e => setLabAssign(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                                    />
+                                                    <button onClick={() => assignLabTests(p)}
+                                                        style={{ width: "100%", padding: "6px 12px", borderRadius: 6, background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                                                        ➕ Assign Lab Technician
+                                                    </button>
+                                                </div>
+
+                                                <div style={{ borderTop: "1px solid #1e2d4a", paddingTop: 8, marginTop: 4 }}>
+                                                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 6, fontWeight: 700 }}>ADD MEDICATION</div>
+                                                    <input
+                                                        placeholder="e.g. Paracetamol 1-0-1 (5 days)"
+                                                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #1e2d4a", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12, marginBottom: 6 }}
+                                                        value={labAssign[`med_${p.id}`] || ""}
+                                                        onChange={e => setLabAssign(prev => ({ ...prev, [`med_${p.id}`]: e.target.value }))}
+                                                    />
+                                                    <button onClick={async () => {
+                                                        const medDesc = labAssign[`med_${p.id}`] || "General Medication";
+                                                        try {
+                                                            await authAxios().post("/pharmacy/prescribe", [{
+                                                                patient_id: p.id,
+                                                                medicine_name: medDesc,
+                                                                dosage: "As directed",
+                                                                duration: "Until finished"
+                                                            }]);
+                                                            showToast("✅ Medicines sent to Pharmacy");
+                                                            setLabAssign(prev => ({ ...prev, [`med_${p.id}`]: "" }));
+                                                            fetchData();
+                                                        } catch (err) { showToast("❌ Failed to send to Pharmacy"); }
+                                                    }}
+                                                        style={{ width: "100%", padding: "6px 12px", borderRadius: 6, background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
+                                                        ➕ Add Prescribed Medicines
+                                                    </button>
+                                                </div>
+
+                                                <div style={{ borderTop: "1px solid #1e2d4a", paddingTop: 8, marginTop: 4 }}>
+                                                    {p.status === "DISCHARGE_PENDING" ? (
+                                                        <button onClick={() => { updateStatus(p.patient_code, "DISCHARGED"); nurseAction(p.id, "🚪 Patient Discharged by Nurse"); }}
+                                                            style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: "linear-gradient(135deg,#22c55e,#16a34a)", color: "#000", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
+                                                            🏁 Mark Final Discharge
+                                                        </button>
+                                                    ) : (
+                                                        <button onClick={async () => {
+                                                            try {
+                                                                await authAxios().post("/billing/generate-discharge-bill", { patient_id: p.id });
+                                                                showToast("✅ Sent to Billing");
+                                                                setLabAssign(prev => ({ ...prev, open: null }));
+                                                                fetchData();
+                                                            } catch (err) { showToast("❌ Failed to send to billing") }
+                                                        }}
+                                                            style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                                                            💳 Send to Billing
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
 

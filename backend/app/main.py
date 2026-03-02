@@ -11,6 +11,8 @@ from app.routers.staff         import router as staff_router
 from app.routers.tickets       import router as tickets_router
 from app.routers.movement_logs import router as movement_logs_router
 from app.routers.chatbot       import router as chatbot_router
+from app.routers.pharmacy      import router as pharmacy_router
+from app.routers.billing       import router as billing_router
 
 # Import all models so SQLAlchemy creates the tables
 from app.models.user         import User
@@ -22,14 +24,16 @@ from app.models.workflow     import WorkflowLog
 from app.models.patient_user import PatientUser
 from app.models.ticket       import Ticket
 from app.models.movement_log import MovementLog
+from app.models.pharmacy     import MedicinePrescription
+from app.models.billing      import Invoice
 
 Base.metadata.create_all(bind=engine)
 os.makedirs("uploads", exist_ok=True)
 
 app = FastAPI(
     title="MedFlow — Hospital Workflow Automation",
-    description="Role-based: Super Admin · Doctor · Nurse · Lab Technician · Patient",
-    version="4.0.0",
+    description="Role-based: Super Admin · Doctor · Nurse · Lab Technician · Pharmacist · Billing · Patient",
+    version="5.0.0",
 )
 
 app.add_middleware(
@@ -45,6 +49,8 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(auth_router,          prefix="/api/auth",          tags=["Auth"])
 app.include_router(patients_router,      prefix="/api/patients",      tags=["Patients"])
 app.include_router(lab_router,           prefix="/api/lab-reports",   tags=["Lab Reports"])
+app.include_router(pharmacy_router,      prefix="/api/pharmacy",      tags=["Pharmacy"])
+app.include_router(billing_router,       prefix="/api/billing",       tags=["Billing"])
 app.include_router(staff_router,         prefix="/api/staff",         tags=["Staff Management"])
 app.include_router(tickets_router,       prefix="/api/tickets",       tags=["Tickets"])
 app.include_router(movement_logs_router, prefix="/api/movement-logs", tags=["Movement Logs"])

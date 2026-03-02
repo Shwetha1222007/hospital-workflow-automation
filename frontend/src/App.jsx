@@ -6,6 +6,8 @@ import AdminDashboard from "./pages/AdminDashboard";
 import NurseDashboard from "./pages/NurseDashboard";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import PatientDashboard from "./pages/PatientDashboard";
+import PharmacyDashboard from "./pages/PharmacyDashboard";
+import BillingDashboard from "./pages/BillingDashboard";
 
 function AppInner() {
   const { user, logout, loading } = useAuth();
@@ -45,6 +47,8 @@ function AppInner() {
 
   if (currentRole === "PATIENT") return <PatientDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "LAB_TECHNICIAN") return <LabDashboard onLogout={handleLogout} />;
+  if (currentRole === "PHARMACIST") return <PharmacyDashboard onLogout={handleLogout} />;
+  if (currentRole === "BILLING") return <BillingDashboard onLogout={handleLogout} />;
   if (currentRole === "SUPER_ADMIN") return <AdminDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "DOCTOR") return <DoctorDashboard user={userData} onLogout={handleLogout} />;
   if (currentRole === "NURSE") return <NurseDashboard user={userData} onLogout={handleLogout} />;

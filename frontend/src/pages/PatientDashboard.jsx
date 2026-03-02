@@ -393,14 +393,28 @@ export default function PatientDashboard({ user, onLogout }) {
                       <Badge color={{ PENDING: "#f59e0b", IN_PROGRESS: "#3b82f6", COMPLETED: "#22c55e" }[l.status] || "#888"} text={t(`status.${l.status}`) || l.status} />
                     </div>
                     {l.notes && <div style={{ color: "#a3e635", fontSize: 13 }}>📋 {l.notes}</div>}
+
+                    {l.status === "PENDING" && l.queue_position !== undefined && (
+                      <div style={{ marginTop: 12, padding: "12px", background: "rgba(245,158,11,0.08)", border: "1px dashed rgba(245,158,11,0.3)", borderRadius: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 16 }}>⏱️</span>
+                          <span style={{ color: "#f59e0b", fontSize: 13, fontWeight: 700 }}>Priority Queue Estimator</span>
+                        </div>
+                        <div style={{ color: C.sub, fontSize: 12, marginLeft: 24 }}>
+                          There are <strong>{l.queue_position}</strong> patient(s) ahead of you.<br />
+                          Estimated wait time: <strong>~{l.estimated_wait_mins} mins</strong>
+                        </div>
+                      </div>
+                    )}
+
                     {l.status === "COMPLETED" && l.file_path ? (
                       <a href={`http://localhost:8000/uploads/${l.file_path.split("/").pop()}`} target="_blank" rel="noreferrer"
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "8px 14px", background: "rgba(0,212,255,0.1)", border: `1px solid ${C.border}`, borderRadius: 9, color: C.cyan, textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
                         📄 {t("lab.downloadReport")}
                       </a>
-                    ) : (
+                    ) : l.status !== "PENDING" ? (
                       <div style={{ color: C.sub, fontSize: 12, marginTop: 10 }}>⏳ {t("lab.reportPending")}</div>
-                    )}
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -427,7 +441,7 @@ export default function PatientDashboard({ user, onLogout }) {
                     </button>
                   </div>
                   <div style={{ color: C.sub, fontSize: 11, marginTop: 8 }}>
-                    💡 {t("tickets.autoRouteHint")}
+                    💡 Your query will be automatically assigned to the correct department (Doctor, Nurse, Lab, Pharmacy, Billing, or Admin)
                   </div>
                 </div>
 

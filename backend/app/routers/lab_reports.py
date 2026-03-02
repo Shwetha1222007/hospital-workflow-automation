@@ -42,6 +42,10 @@ class LabReportOut(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    
+    # Priority Queue ETA
+    queue_position: Optional[int] = None
+    estimated_wait_mins: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -88,31 +92,76 @@ def get_reports(
     """
     Lab Technician: View only assigned requests.
     Doctor: View requests they prescribed.
+    Patient: View their own requests (and ETA logic).
     Admin: View all.
     """
     q = db.query(LabReport)
 
-    # Doctors only see their own prescriptions
     if current_user.role == UserRole.DOCTOR:
         q = q.filter(LabReport.doctor_id == current_user.id)
-    # Lab tech sees ALL reports (so they can act on any incoming test)
-    # elif current_user.role == UserRole.LAB_TECHNICIAN: (no filter - see all)
+    elif current_user.role == UserRole.PATIENT:
+        from app.models.patient_user import PatientUser
+        link = db.query(PatientUser).filter(PatientUser.user_id == current_user.id).first()
+        if link:
+            q = q.filter(LabReport.patient_id == link.patient_id)
 
     if status:
         q = q.filter(LabReport.status == status.upper())
 
-    return q.order_by(LabReport.created_at.desc()).all()
+    reports = q.order_by(LabReport.created_at.desc()).all()
+    
+    # Pre-calculate queue for PENDING reports
+    out = []
+    
+    # Priority Mapping for line-jumping logic
+    priority_map = {"EMERGENCY": 3, "URGENT": 2, "NORMAL": 1}
+
+    for r in reports:
+        report_data = LabReportOut.model_validate(r)
+        
+        # Calculate ETA only if PENDING
+        if r.status == LabStatus.PENDING:
+            # How many patients are ahead of *this* report's patient?
+            current_patient = r.patient
+            if current_patient:
+                # Get all pending lab tests assigned to the same Lab Tech
+                # that have higher priority, OR same priority but older timestamp
+                curr_pri = priority_map.get(current_patient.priority, 1)
+                
+                ahead = db.query(LabReport).join(Patient).filter(
+                    LabReport.status == LabStatus.PENDING,
+                    LabReport.labtech_id == r.labtech_id,
+                    LabReport.id != r.id
+                ).all()
+
+                queue_pos = 0
+                for a in ahead:
+                    a_pri = priority_map.get(a.patient.priority, 1)
+                    if a_pri > curr_pri:
+                        queue_pos += 1
+                    elif a_pri == curr_pri and a.created_at < r.created_at:
+                        queue_pos += 1
+
+                report_data.queue_position = queue_pos
+                report_data.estimated_wait_mins = (queue_pos + 1) * 30  # Assume 30 mins per test
+
+        out.append(report_data)
+
+    return out
 
 
-# ── POST /prescribe — Doctor only ─────────────────────────────────────────────
+# ── POST /assign — Nurse only ─────────────────────────────────────────────
 
-@router.post("/prescribe", response_model=List[LabReportOut], status_code=201)
-def prescribe_tests(
+@router.post("/assign", response_model=List[LabReportOut], status_code=201)
+def assign_tests(
     requests: List[LabRequestCreate],
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_doctor),
+    current_user: User = Depends(get_current_user),
 ):
-    """Doctor prescribes lab tests for a patient."""
+    """Nurse assigns specific lab tests to Lab Technicians."""
+    if current_user.role != UserRole.NURSE:
+        raise HTTPException(403, "Only nurses can assign specific lab tests")
+
     added = []
     patient_id = None
     
@@ -120,7 +169,7 @@ def prescribe_tests(
         patient_id = r.patient_id
         code = generate_report_code(db)
         
-        # Auto-assign labtech if not provided (find one with role LAB_TECHNICIAN and fewest current jobs)
+        # Auto-assign labtech if not provided
         l_id = r.labtech_id
         if not l_id:
             techs = db.query(User).filter(User.role == UserRole.LAB_TECHNICIAN).all()
@@ -130,27 +179,18 @@ def prescribe_tests(
         report = LabReport(
             report_code = code,
             patient_id  = r.patient_id,
-            doctor_id   = current_user.id,
+            doctor_id   = 1, # Placeholder, real doctor ID can be fetched from patient if needed
             labtech_id  = l_id,
             test_type   = r.test_type,
             status      = LabStatus.PENDING,
         )
         db.add(report)
         added.append(report)
-        db.commit() # commit each to get unique codes if generator is based on DB count
+        db.commit()
         db.refresh(report)
 
-    # Log workflow transition — LAB PRESCRIBED (RED: waiting for lab)
+    # Log workflow transition — LAB ASSIGNED (RED: waiting for lab)
     if patient_id:
-        log = WorkflowLog(
-            patient_id = patient_id,
-            stage      = WorkflowStage.LAB,
-            status     = WorkflowStatus.ASSIGNED,
-            updated_by = current_user.id,
-            notes      = f"Prescribed {len(added)} tests. Stage moved to LAB."
-        )
-        db.add(log)
-
         p = db.query(Patient).filter(Patient.id == patient_id).first()
         test_names = ", ".join(r.test_type for r in added)
         if p:
@@ -158,11 +198,11 @@ def prescribe_tests(
             log_movement(
                 db,
                 patient_id   = patient_id,
-                reference_id = patient_id,
+                reference_id = added[0].id,
                 ref_type     = "LAB",
-                from_dept    = "DOCTOR",
+                from_dept    = "NURSE",
                 to_dept      = "LAB",
-                action       = f"🔬 Test(s) prescribed: {test_names} — awaiting lab",
+                action       = f"🧪 Lab Test Assigned: {test_names} — Awaiting Lab Tech",
                 updated_by   = current_user.id,
                 status       = "PENDING",
                 color_code   = LogColor.RED,
@@ -225,7 +265,7 @@ async def upload_new_lab_report(
     db.commit()
     db.refresh(report)
 
-    # Log movement — lab report uploaded
+    # Log movement — lab report uploaded (GREEN)
     log_movement(
         db,
         patient_id   = patient.id,
@@ -237,6 +277,21 @@ async def upload_new_lab_report(
         updated_by   = current_user.id,
         status       = "COMPLETED",
         color_code   = LogColor.GREEN,
+    )
+    
+    # Auto-trigger Doctor Review Pending (RED)
+    patient.status = "DOCTOR_REVIEW_PENDING"
+    log_movement(
+        db,
+        patient_id   = patient.id,
+        reference_id = report.id,
+        ref_type     = "DOCTOR",
+        from_dept    = "LAB",
+        to_dept      = "DOCTOR",
+        action       = f"📋 Doctor Review Pending for {test_name}",
+        updated_by   = current_user.id,
+        status       = "PENDING",
+        color_code   = LogColor.RED,
     )
     db.commit()
 
@@ -311,8 +366,9 @@ async def upload_lab_report(
         )
         db.add(wlog)
         if p:
-            p.status = "LAB_COMPLETED"
+            p.status = "DOCTOR_REVIEW_PENDING"
 
+        # GREEN log for Lab Completed
         log_movement(
             db,
             patient_id   = report.patient_id,
@@ -320,10 +376,24 @@ async def upload_lab_report(
             ref_type     = "LAB",
             from_dept    = "LAB",
             to_dept      = "DOCTOR",
-            action       = f"✅ Lab report uploaded: {report.test_type} ({report.report_code})",
+            action       = f"✅ All Lab reports uploaded",
             updated_by   = current_user.id,
             status       = "COMPLETED",
             color_code   = LogColor.GREEN,
+        )
+
+        # RED log for Doctor Review Pending
+        log_movement(
+            db,
+            patient_id   = report.patient_id,
+            reference_id = report.id,
+            ref_type     = "DOCTOR",
+            from_dept    = "LAB",
+            to_dept      = "DOCTOR",
+            action       = f"📋 Doctor Review Pending for Lab Results",
+            updated_by   = current_user.id,
+            status       = "PENDING",
+            color_code   = LogColor.RED,
         )
     else:
         # Partial upload — still in progress

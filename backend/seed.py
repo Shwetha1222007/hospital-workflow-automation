@@ -17,6 +17,8 @@ from app.models.patient_user import PatientUser
 from app.models.ticket       import Ticket, classify_ticket
 from app.models.workflow     import WorkflowLog
 from app.models.movement_log import MovementLog
+from app.models.pharmacy     import MedicinePrescription
+from app.models.billing      import Invoice
 from app.core.security       import hash_password
 
 Base.metadata.drop_all(bind=engine)
@@ -71,6 +73,13 @@ def seed():
     # ── Lab Technician ────────────────────────────────────────────────────────
     lab_user = create_user("lab@medflow.com", "lab123", "Lab Tech Priya", UserRole.LAB_TECHNICIAN)
     print(f"  Lab Tech: Lab Tech Priya")
+
+    # ── Pharmacist & Billing ──────────────────────────────────────────────────
+    pharmacy_user = create_user("pharmacy@medflow.com", "pharmacy123", "Pharmacist Ravi", UserRole.PHARMACIST)
+    print(f"  Pharmacist: Pharmacist Ravi")
+    
+    billing_user = create_user("billing@medflow.com", "billing123", "Billing Staff Anu", UserRole.BILLING)
+    print(f"  Billing: Billing Staff Anu")
 
     # ── Sample Patients ───────────────────────────────────────────────────────
     SAMPLE_PATIENTS = [

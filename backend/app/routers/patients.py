@@ -12,6 +12,7 @@ from app.models.workflow import WorkflowLog, WorkflowStage, WorkflowStatus
 from app.models.patient_user import PatientUser
 from app.models.movement_log import MovementLog, log_movement, LogColor
 from app.core.dependencies import get_current_user, require_super_admin
+from app.core.security import hash_password
 
 router = APIRouter()
 
@@ -258,6 +259,22 @@ def create_patient(
         created_by              = current_user.id,
     )
     db.add(patient)
+    db.flush() # flush to get patient.id
+
+    # Create associated user account for login
+    hashed_pwd = hash_password(patient_code)
+    pat_user = User(
+        email=f"{patient_code.lower()}@medflow.com", # Dummy email
+        hashed_password=hashed_pwd,
+        full_name=patient.name,
+        role=UserRole.PATIENT
+    )
+    db.add(pat_user)
+    db.flush()
+
+    pat_user_link = PatientUser(patient_id=patient.id, user_id=pat_user.id)
+    db.add(pat_user_link)
+
     db.commit()
     db.refresh(patient)
 
@@ -428,9 +445,105 @@ def mark_consultation(
         color_code   = LogColor.GREEN,
     )
     db.commit()
+    db.commit()
     db.refresh(p)
     return _enrich(p)
 
+
+# ── POST /{code}/doctor/consultation-done — Doctor marks consultation complete ─
+
+@router.post("/{patient_code}/doctor/consultation-done", response_model=PatientOut)
+def doctor_mark_consultation_done(
+    patient_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Doctor marks their consultation as completed."""
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(403, "Only doctors can mark consultation done")
+    p = db.query(Patient).filter(Patient.patient_code == patient_code).first()
+    if not p:
+        raise HTTPException(404, f"Patient {patient_code} not found")
+
+    log_movement(
+        db,
+        patient_id   = p.id,
+        reference_id = p.id,
+        ref_type     = "DOCTOR",
+        from_dept    = "DOCTOR",
+        to_dept      = "DOCTOR",
+        action       = f"🩺 Consultation Completed",
+        updated_by   = current_user.id,
+        status       = "COMPLETED",
+        color_code   = LogColor.GREEN,
+    )
+    db.commit()
+    db.refresh(p)
+    return _enrich(p)
+
+
+# ── POST /{code}/doctor/report-reviewed — Doctor marks lab report reviewed ───
+
+@router.post("/{patient_code}/doctor/report-reviewed", response_model=PatientOut)
+def doctor_mark_report_reviewed(
+    patient_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Doctor marks the lab report as reviewed."""
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(403, "Only doctors can mark reports reviewed")
+    p = db.query(Patient).filter(Patient.patient_code == patient_code).first()
+    if not p:
+        raise HTTPException(404, f"Patient {patient_code} not found")
+
+    log_movement(
+        db,
+        patient_id   = p.id,
+        reference_id = p.id,
+        ref_type     = "DOCTOR",
+        from_dept    = "DOCTOR",
+        to_dept      = "DOCTOR",
+        action       = f"✅ Doctor Review Completed",
+        updated_by   = current_user.id,
+        status       = "COMPLETED",
+        color_code   = LogColor.GREEN,
+    )
+    db.commit()
+    db.refresh(p)
+    return _enrich(p)
+
+# ── POST /{code}/doctor/prescribe-lab — Doctor prescribes lab tests ────────
+
+@router.post("/{patient_code}/doctor/prescribe-lab", response_model=PatientOut)
+def doctor_prescribe_lab(
+    patient_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Doctor prescribes lab tests. Nurse will assign specific tests later."""
+    if current_user.role != UserRole.DOCTOR:
+        raise HTTPException(403, "Only doctors can prescribe lab tests")
+    p = db.query(Patient).filter(Patient.patient_code == patient_code).first()
+    if not p:
+        raise HTTPException(404, f"Patient {patient_code} not found")
+
+    p.status = "LAB_PENDING"
+    log_movement(
+        db,
+        patient_id   = p.id,
+        reference_id = p.id,
+        ref_type     = "DOCTOR",
+        from_dept    = "DOCTOR",
+        to_dept      = "NURSE",
+        action       = f"🧪 Lab Test Prescribed — Awaiting Nurse Assignment",
+        updated_by   = current_user.id,
+        status       = "PENDING",
+        color_code   = LogColor.RED,
+    )
+    db.commit()
+    db.refresh(p)
+    return _enrich(p)
 
 
 @router.get("/{patient_code}/workflow", response_model=List[WorkflowLogOut])

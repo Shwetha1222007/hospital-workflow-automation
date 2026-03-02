@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { searchPatients } from "../api/patientsApi";
-import { uploadLabReport, updateLabStatus, getAllReports, getPatientReports } from "../api/labApi";
+import { uploadLabReport, updateLabStatus, getAllReports, getPatientReports, uploadExistingReportFile } from "../api/labApi";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 
@@ -45,6 +45,7 @@ export default function LabDashboard({ onLogout }) {
   const [newStatus, setNewStatus] = useState("");
   const [statusNotes, setStatusNotes] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [updateFile, setUpdateFile] = useState(null);
 
   useEffect(() => { loadAllReports(); }, []);
 
@@ -95,17 +96,34 @@ export default function LabDashboard({ onLogout }) {
   };
 
   const handleStatusUpdate = async () => {
-    if (!editingReport || !newStatus) return;
+    if (!editingReport) return;
+    if (newStatus === "COMPLETED" && !updateFile && !editingReport.file_path) {
+      showToast("Please select a file to upload for COMPLETED status", true);
+      return;
+    }
+
+    setUploading(true);
     try {
-      await updateLabStatus(editingReport.id, newStatus, statusNotes);
-      showToast("✅ Status updated successfully!");
-      setEditingReport(null); setNewStatus(""); setStatusNotes("");
+      if (updateFile) {
+        const fd = new FormData();
+        if (statusNotes) fd.append("notes", statusNotes);
+        fd.append("file", updateFile);
+        await uploadExistingReportFile(editingReport.id, fd);
+        showToast("✅ File uploaded and report marked COMPLETED!");
+      } else {
+        if (!newStatus) return;
+        await updateLabStatus(editingReport.id, newStatus, statusNotes);
+        showToast("✅ Status updated successfully!");
+      }
+
+      setEditingReport(null); setNewStatus(""); setStatusNotes(""); setUpdateFile(null);
       loadAllReports();
       if (selectedPatient) {
         const r = await getPatientReports(selectedPatient.patient_code);
         setPatientReports(r.data);
       }
     } catch { showToast("Update failed", true); }
+    finally { setUploading(false); }
   };
 
   const showToast = (msg, isError = false) => {
@@ -331,7 +349,7 @@ export default function LabDashboard({ onLogout }) {
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      {["Report Code", "Patient ID", "Test Name", "Status", "File", "Uploaded", "Notes"].map(h => (
+                      {["Report Code", "Patient ID", "Test Name", "Queue ETA", "Status", "File", "Uploaded", "Notes"].map(h => (
                         <th key={h} style={{
                           fontSize: 10, fontFamily: "monospace", color: "#4a6a8a",
                           textTransform: "uppercase", letterSpacing: 1,
@@ -350,8 +368,17 @@ export default function LabDashboard({ onLogout }) {
                         <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontFamily: "monospace", fontSize: 12, color: "#00d4ff" }}>{r.report_code}</td>
                         <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontFamily: "monospace", fontSize: 12 }}>#{r.patient_id}</td>
                         <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontSize: 13, fontWeight: 600 }}>{r.test_name}</td>
+                        <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontSize: 12, color: "#f59e0b", fontWeight: 600 }}>
+                          {r.status === "PENDING" && r.queue_position !== undefined ? `Pos: ${r.queue_position} (~${r.estimated_wait_mins}m)` : "—"}
+                        </td>
                         <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)" }}><Badge status={r.status} /></td>
-                        <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontSize: 12, color: "#5a7aa0", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.file_name || "—"}</td>
+                        <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontSize: 12, color: "#5a7aa0", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {r.file_name ? (
+                            <a href={`http://localhost:8000/uploads/${r.file_name}`} target="_blank" rel="noreferrer" style={{ color: "#00d4ff", textDecoration: "underline" }}>
+                              {r.file_name}
+                            </a>
+                          ) : "—"}
+                        </td>
                         <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontSize: 11, color: "#5a7aa0", fontFamily: "monospace", whiteSpace: "nowrap" }}>{new Date(r.created_at).toLocaleDateString()}</td>
                         <td style={{ padding: "11px 14px", borderBottom: "1px solid rgba(0,212,255,0.05)", fontSize: 12, color: "#5a7aa0", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.notes || "—"}</td>
                       </tr>
@@ -371,7 +398,7 @@ export default function LabDashboard({ onLogout }) {
               <div style={s.label}>Select Report to Update</div>
               {allReports.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#5a7aa0" }}>No reports yet</div>}
               {allReports.map(r => (
-                <div key={r.id} onClick={() => { setEditingReport(r); setNewStatus(r.status); setStatusNotes(""); }} style={{
+                <div key={r.id} onClick={() => { setEditingReport(r); setNewStatus(r.status); setStatusNotes(""); setUpdateFile(null); }} style={{
                   padding: "13px 16px", borderRadius: 10,
                   border: "1px solid " + (editingReport?.id === r.id ? "#00d4ff" : "rgba(0,212,255,0.1)"),
                   marginBottom: 8, cursor: "pointer",
@@ -382,7 +409,14 @@ export default function LabDashboard({ onLogout }) {
                     <span style={{ fontFamily: "monospace", fontSize: 12, color: "#00d4ff" }}>{r.report_code}</span>
                     <Badge status={r.status} />
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{r.test_name}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{r.test_name}</div>
+                    {r.status === "PENDING" && r.queue_position !== undefined && (
+                      <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700, background: "rgba(245,158,11,0.1)", padding: "2px 8px", borderRadius: 10 }}>
+                        Pos: {r.queue_position}
+                      </div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: "#4a6a8a", fontFamily: "monospace" }}>Patient #{r.patient_id} · {new Date(r.created_at).toLocaleDateString()}</div>
                 </div>
               ))}
@@ -436,8 +470,28 @@ export default function LabDashboard({ onLogout }) {
                     placeholder="Add update notes or observations..."
                     value={statusNotes} onChange={e => setStatusNotes(e.target.value)}
                   />
-                  <button onClick={handleStatusUpdate} style={{ ...s.btn, width: "100%" }}>
-                    💾 Save Update
+
+                  {editingReport.status !== "COMPLETED" && (
+                    <div style={{ marginBottom: 18, padding: "12px", background: "rgba(34,197,94,0.05)", border: "1px dashed rgba(34,197,94,0.3)", borderRadius: 10 }}>
+                      <label style={{ ...s.label, color: "#22c55e", display: "flex", gap: "6px" }}>
+                        <span>📤</span> Upload Final Report
+                      </label>
+                      <div style={{ fontSize: 10, color: "#4a6a8a", marginBottom: 10 }}>Uploading a file will automatically mark this test as COMPLETED.</div>
+                      <input
+                        type="file" accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={e => { setUpdateFile(e.target.files[0]); if (e.target.files[0]) setNewStatus("COMPLETED"); }}
+                        style={{ ...s.input, padding: "8px 12px", cursor: "pointer", background: "rgba(0,0,0,0.3)" }}
+                      />
+                      {updateFile && (
+                        <div style={{ fontSize: 12, color: "#22c55e", marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                          ✅ <span>{updateFile.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button onClick={handleStatusUpdate} disabled={uploading} style={{ ...s.btn, width: "100%", opacity: uploading ? 0.7 : 1 }}>
+                    {uploading ? "⏳ Saving..." : "💾 Save Update"}
                   </button>
                 </>
               ) : (

@@ -13,5 +13,10 @@ export const getPatientReports = (patientCode) =>
 
 export const getAllReports = () => api.get("/api/lab-reports/");
 
+export const uploadExistingReportFile = (reportId, formData) =>
+  api.post(`/api/lab-reports/${reportId}/upload`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
 export const downloadReport = (reportId) =>
   `http://localhost:8000/api/lab-reports/${reportId}/download`;

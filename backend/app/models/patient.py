@@ -53,6 +53,9 @@ class Patient(Base):
     workflow_logs = relationship("WorkflowLog", back_populates="patient", cascade="all, delete-orphan")
     tickets       = relationship("Ticket", back_populates="patient", cascade="all, delete-orphan")
     patient_user  = relationship("PatientUser", back_populates="patient", uselist=False, cascade="all, delete-orphan")
+    medicines     = relationship("MedicinePrescription", back_populates="patient", cascade="all, delete-orphan")
+    invoices      = relationship("Invoice", back_populates="patient", cascade="all, delete-orphan")
+
 
 
 def generate_patient_code(session: Session) -> str:

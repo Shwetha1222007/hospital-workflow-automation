@@ -146,8 +146,10 @@ export default function LoginPage({ onLogin }) {
           </div>
         ) : (
           <div style={S.hint}>
-            📋 <strong>Demo:</strong> admin@medflow.com / admin123 &nbsp;|&nbsp;
-            dr.sharma@medflow.com / doc123 &nbsp;|&nbsp; lab@medflow.com / lab123
+            📋 <strong>Demo Logins:</strong><br />
+            admin@medflow.com / admin123 &nbsp;|&nbsp; dr.sharma@medflow.com / doc123<br />
+            lab@medflow.com / lab123 &nbsp;|&nbsp; pharmacy@medflow.com / pharmacy123<br />
+            billing@medflow.com / billing123
           </div>
         )}
       </div>

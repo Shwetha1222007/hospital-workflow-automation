@@ -39,7 +39,7 @@ export default function DoctorDashboard({ user, onLogout }) {
     const [labTasks, setLabTasks] = useState([]);
     const [selected, setSelected] = useState(null);
     const [notes, setNotes] = useState({ diagnosis: "", treatment_notes: "", status: "" });
-    const [prescribe, setPrescribe] = useState({ patient_id: "", tests: "" });
+    const [prescribe, setPrescribe] = useState({ patient_id: "", medicine: "", dosage: "", duration: "" });
     const [toast, setToast] = useState("");
     const [ticketNotes, setTicketNotes] = useState({});
     const [timelineModal, setTimelineModal] = useState(null); // { patient }
@@ -85,13 +85,44 @@ export default function DoctorDashboard({ user, onLogout }) {
         }
     };
 
-    const prescribeTests = async () => {
-        if (!prescribe.patient_id || !prescribe.tests) return;
-        const tests = prescribe.tests.split(",").map(t => t.trim()).filter(Boolean);
+    const markConsultationDone = async () => {
+        if (!selected) return;
         try {
-            await ax().post("/lab-reports/prescribe", tests.map(t => ({ patient_id: +prescribe.patient_id, test_type: t })));
-            showToast(`✅ ${tests.length} test(s) prescribed`);
-            setPrescribe({ patient_id: "", tests: "" }); fetchAll();
+            await ax().post(`/patients/${selected.patient_code}/doctor/consultation-done`);
+            showToast("✅ Consultation marked as done");
+            fetchAll(); setSelected(null);
+        } catch (e) { showToast("❌ Error"); }
+    };
+
+    const markReportReviewed = async () => {
+        if (!selected) return;
+        try {
+            await ax().post(`/patients/${selected.patient_code}/doctor/report-reviewed`);
+            showToast("✅ Lab Report marked as reviewed");
+            fetchAll(); setSelected(null);
+        } catch (e) { showToast("❌ Error"); }
+    };
+
+    const triggerPrescribeLab = async () => {
+        if (!selected) return;
+        try {
+            await ax().post(`/patients/${selected.patient_code}/doctor/prescribe-lab`);
+            showToast("✅ Lab Test prescribed (Awaiting Nurse)");
+            fetchAll(); setSelected(null);
+        } catch (e) { showToast("❌ Error"); }
+    };
+
+    const prescribeMedicine = async () => {
+        if (!prescribe.patient_id || !prescribe.medicine) return;
+        try {
+            await ax().post("/pharmacy/prescribe", [{
+                patient_id: +prescribe.patient_id,
+                medicine_name: prescribe.medicine,
+                dosage: prescribe.dosage || "1-0-1",
+                duration: prescribe.duration || "5 Days"
+            }]);
+            showToast(`✅ Medicine prescribed`);
+            setPrescribe({ patient_id: "", medicine: "", dosage: "", duration: "" }); fetchAll();
         } catch (e) {
             showToast("❌ " + (e?.response?.data?.detail || "Error"));
         }
@@ -107,7 +138,7 @@ export default function DoctorDashboard({ user, onLogout }) {
 
     const TABS = [
         { id: "patients", label: "👥 My Patients" },
-        { id: "prescribe", label: "🧪 Prescribe Tests" },
+        { id: "prescribe", label: "💊 Prescribe Medicine" },
         { id: "tickets", label: `📩 Tickets ${tickets.filter(t => t.status !== "RESOLVED").length ? `(${tickets.filter(t => t.status !== "RESOLVED").length})` : ""}` },
         { id: "lab", label: "🔬 Lab Tasks" },
     ];
@@ -188,10 +219,10 @@ export default function DoctorDashboard({ user, onLogout }) {
                     </>
                 )}
 
-                {/* ── PRESCRIBE TESTS ── */}
+                {/* ── PRESCRIBE MEDICINE ── */}
                 {tab === "prescribe" && (
                     <div style={{ maxWidth: 520 }}>
-                        <h2 style={{ color: "#fff", marginBottom: 20 }}>🧪 Prescribe Lab Tests</h2>
+                        <h2 style={{ color: "#fff", marginBottom: 20 }}>💊 Prescribe Medicine</h2>
                         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24 }}>
                             <label style={{ color: C.sub, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>PATIENT</label>
                             <select
@@ -202,15 +233,38 @@ export default function DoctorDashboard({ user, onLogout }) {
                                 <option value="">Select patient...</option>
                                 {patients.map(p => <option key={p.id} value={p.id}>{p.patient_code} — {p.name}</option>)}
                             </select>
-                            <label style={{ color: C.sub, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>TEST TYPES (comma separated)</label>
+
+                            <label style={{ color: C.sub, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>MEDICINE NAME</label>
                             <input
-                                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, color: "#fff", fontSize: 13, marginBottom: 20, boxSizing: "border-box" }}
-                                placeholder="e.g. Blood Test, X-Ray, ECG"
-                                value={prescribe.tests}
-                                onChange={e => setPrescribe(p => ({ ...p, tests: e.target.value }))}
+                                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, color: "#fff", fontSize: 13, marginBottom: 16, boxSizing: "border-box" }}
+                                placeholder="e.g. Paracetamol 500mg"
+                                value={prescribe.medicine}
+                                onChange={e => setPrescribe(p => ({ ...p, medicine: e.target.value }))}
                             />
-                            <button onClick={prescribeTests} style={{ padding: "11px 24px", background: "linear-gradient(135deg,#00d4ff,#0077ff)", border: "none", borderRadius: 10, color: "#0a0f1e", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                                Prescribe Tests →
+
+                            <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ color: C.sub, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>DOSAGE</label>
+                                    <input
+                                        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, color: "#fff", fontSize: 13, boxSizing: "border-box" }}
+                                        placeholder="e.g. 1-0-1"
+                                        value={prescribe.dosage}
+                                        onChange={e => setPrescribe(p => ({ ...p, dosage: e.target.value }))}
+                                    />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ color: C.sub, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>DURATION</label>
+                                    <input
+                                        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, color: "#fff", fontSize: 13, boxSizing: "border-box" }}
+                                        placeholder="e.g. 5 Days"
+                                        value={prescribe.duration}
+                                        onChange={e => setPrescribe(p => ({ ...p, duration: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <button onClick={prescribeMedicine} style={{ padding: "11px 24px", background: "linear-gradient(135deg,#00d4ff,#0077ff)", border: "none", borderRadius: 10, color: "#0a0f1e", fontWeight: 700, fontSize: 14, cursor: "pointer", width: "100%" }}>
+                                Prescribe Medicine →
                             </button>
                         </div>
 
@@ -307,14 +361,19 @@ export default function DoctorDashboard({ user, onLogout }) {
                             placeholder="Enter treatment notes..." value={notes.treatment_notes} onChange={e => setNotes(n => ({ ...n, treatment_notes: e.target.value }))} />
                         <label style={{ color: C.sub, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>STATUS</label>
                         <select style={{ width: "100%", padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: `1px solid ${C.border}`, color: "#fff", fontSize: 13, marginBottom: 20 }}
-                            value={notes.status} onChange={e => setNotes(n => ({ ...n, status: e.target.value }))}>
-                            <option value="PENDING">PENDING</option>
-                            <option value="IN_PROGRESS">IN PROGRESS</option>
-                            <option value="COMPLETED">COMPLETED</option>
+                            value={notes.status} onChange={e => setNotes(n => ({ ...n, status: e.target.value }))} disabled>
+                            <option value={notes.status}>{notes.status}</option>
                         </select>
-                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                            <button onClick={() => setSelected(null)} style={{ padding: "10px 20px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, color: C.sub, cursor: "pointer" }}>Cancel</button>
-                            <button onClick={saveNotes} style={{ padding: "10px 24px", background: "linear-gradient(135deg,#00d4ff,#0077ff)", border: "none", borderRadius: 10, color: "#0a0f1e", fontWeight: 700, cursor: "pointer" }}>Save Changes</button>
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap", marginBottom: 16 }}>
+                            <button onClick={saveNotes} style={{ padding: "10px 16px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, color: C.cyan, fontWeight: 700, cursor: "pointer" }}>Save Notes Only</button>
+                            <button onClick={markConsultationDone} style={{ padding: "10px 16px", background: "linear-gradient(135deg,#00d4ff,#0077ff)", border: "none", borderRadius: 10, color: "#0a0f1e", fontWeight: 700, cursor: "pointer" }}>✓ Mark Consultation Done</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                            {selected.status === "DOCTOR_REVIEW_PENDING" && (
+                                <button onClick={markReportReviewed} style={{ padding: "10px 16px", background: "linear-gradient(135deg,#22c55e,#16a34a)", border: "none", borderRadius: 10, color: "#0a0f1e", fontWeight: 700, cursor: "pointer" }}>✅ Mark Report Reviewed</button>
+                            )}
+                            <button onClick={triggerPrescribeLab} style={{ padding: "10px 16px", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, color: "#ef4444", fontWeight: 700, cursor: "pointer" }}>🧪 Prescribe Lab Test</button>
+                            <button onClick={() => { setTab("prescribe"); setPrescribe(p => ({ ...p, patient_id: selected.id })); setSelected(null); }} style={{ padding: "10px 16px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: 10, color: "#f59e0b", fontWeight: 700, cursor: "pointer" }}>💊 Prescribe Medicine</button>
                         </div>
                     </div>
                 </div>
