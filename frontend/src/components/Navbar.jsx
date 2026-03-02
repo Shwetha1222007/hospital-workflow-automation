@@ -4,7 +4,11 @@ const ROLE_CONFIG = {
     LAB_TECHNICIAN: { label: "Lab Technician Portal", icon: "🧪", accent: "#a855f7" },
     PATIENT: { label: "Patient Portal", icon: "🏥", accent: "#00d4ff" },
     ADMIN: { label: "Admin Dashboard", icon: "⚙️", accent: "#00d4ff" },
+    SUPER_ADMIN: { label: "Admin Dashboard", icon: "⚙️", accent: "#00d4ff" },
     DOCTOR: { label: "Doctor Dashboard", icon: "👨‍⚕️", accent: "#22c55e" },
+    NURSE: { label: "Nurse Care Portal", icon: "👩‍⚕️", accent: "#f59e0b" },
+    PHARMACIST: { label: "Pharmacy Portal", icon: "💊", accent: "#f97316" },
+    BILLING: { label: "Billing Dashboard", icon: "💳", accent: "#ec4899" },
 };
 
 export default function Navbar({ user, onLogout }) {

@@ -1,6 +1,6 @@
 """
 Staff management router — Super Admin only.
-Create / list doctors and nurses.
+Create / list doctors, nurses, pharmacists, billing staff.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -22,7 +22,7 @@ class CreateDoctorRequest(BaseModel):
     email:          str
     password:       str
     full_name:      str
-    specialization: str   # CARDIOLOGIST, ORTHOPEDIC, NEUROLOGIST, GENERAL, etc.
+    specialization: str
     department:     Optional[str] = None
     bio:            Optional[str] = None
 
@@ -31,7 +31,14 @@ class CreateNurseRequest(BaseModel):
     email:     str
     password:  str
     full_name: str
-    doctor_id: int         # which doctor this nurse is assigned to
+    doctor_id: int
+
+
+class CreateStaffRequest(BaseModel):
+    email:     str
+    password:  str
+    full_name: str
+    role:      str  # PHARMACIST or BILLING or LAB_TECHNICIAN
 
 
 class DoctorOut(BaseModel):
@@ -59,6 +66,13 @@ class NurseOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class StaffOut(BaseModel):
+    id:        int
+    full_name: str
+    email:     str
+    role:      str
 
 
 # ── Doctors ───────────────────────────────────────────────────────────────────
@@ -173,3 +187,45 @@ def list_nurses(
             doctor_spec=n.doctor.specialization if n.doctor else "",
         ))
     return result
+
+
+# ── Pharmacist / Billing / Lab Tech ──────────────────────────────────────────
+
+@router.post("/create", response_model=StaffOut)
+def create_other_staff(
+    data: CreateStaffRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_super_admin),
+):
+    """Create PHARMACIST, BILLING, or LAB_TECHNICIAN users."""
+    try:
+        role = UserRole(data.role.upper())
+    except ValueError:
+        raise HTTPException(400, f"Invalid role: {data.role}")
+
+    if role not in [UserRole.PHARMACIST, UserRole.BILLING, UserRole.LAB_TECHNICIAN]:
+        raise HTTPException(400, "Use /doctors or /nurses for those roles")
+
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(400, "Email already registered")
+
+    user = User(
+        email=data.email,
+        hashed_password=hash_password(data.password),
+        full_name=data.full_name,
+        role=role,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return StaffOut(id=user.id, full_name=user.full_name, email=user.email, role=role.value)
+
+
+@router.get("/all", response_model=List[StaffOut])
+def list_all_staff(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_super_admin),
+):
+    users = db.query(User).all()
+    return [StaffOut(id=u.id, full_name=u.full_name, email=u.email, role=u.role.value) for u in users]

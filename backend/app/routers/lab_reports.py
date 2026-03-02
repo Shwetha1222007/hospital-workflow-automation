@@ -16,20 +16,22 @@ from app.config import settings
 
 router = APIRouter()
 
-# Ensure upload directory exists
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
 
 class LabRequestCreate(BaseModel):
     patient_id: int
     test_type: str
-    labtech_id: Optional[int] = None   # can be auto-assigned or manually set
+    labtech_id: Optional[int] = None
 
 
 class LabReportOut(BaseModel):
     id: int
     report_code: str
     patient_id: int
+    patient_code: Optional[str] = None
+    patient_name: Optional[str] = None
+    patient_priority: Optional[str] = None
     doctor_id: int
     labtech_id: Optional[int] = None
     test_type: str
@@ -63,6 +65,15 @@ def generate_report_code(db: Session) -> str:
     return f"LAB{max_num + 1:03d}"
 
 
+def _enrich_report(r: LabReport) -> LabReportOut:
+    out = LabReportOut.model_validate(r)
+    if r.patient:
+        out.patient_code     = r.patient.patient_code
+        out.patient_name     = r.patient.name
+        out.patient_priority = r.patient.priority
+    return out
+
+
 # ── GET — filtered by role ────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[LabReportOut])
@@ -71,11 +82,6 @@ def get_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Lab Technician: View only assigned requests.
-    Doctor: View requests they prescribed.
-    Admin: View all.
-    """
     q = db.query(LabReport)
 
     if current_user.role == UserRole.LAB_TECHNICIAN:
@@ -86,7 +92,8 @@ def get_reports(
     if status:
         q = q.filter(LabReport.status == status.upper())
 
-    return q.order_by(LabReport.created_at.desc()).all()
+    reports = q.order_by(LabReport.created_at.desc()).all()
+    return [_enrich_report(r) for r in reports]
 
 
 # ── POST /prescribe — Doctor only ─────────────────────────────────────────────
@@ -97,15 +104,13 @@ def prescribe_tests(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_doctor),
 ):
-    """Doctor prescribes lab tests for a patient."""
     added = []
     patient_id = None
-    
+
     for r in requests:
         patient_id = r.patient_id
         code = generate_report_code(db)
-        
-        # Auto-assign labtech if not provided (find one with role LAB_TECHNICIAN and fewest current jobs)
+
         l_id = r.labtech_id
         if not l_id:
             techs = db.query(User).filter(User.role == UserRole.LAB_TECHNICIAN).all()
@@ -122,28 +127,26 @@ def prescribe_tests(
         )
         db.add(report)
         added.append(report)
-        db.commit() # commit each to get unique codes if generator is based on DB count
+        db.commit()
         db.refresh(report)
 
-    # Log workflow transition
     if patient_id:
         log = WorkflowLog(
             patient_id = patient_id,
             stage      = WorkflowStage.LAB,
             status     = WorkflowStatus.ASSIGNED,
             updated_by = current_user.id,
-            notes      = f"Prescribed {len(added)} tests. Stage moved to LAB."
+            notes      = f"Doctor prescribed {len(added)} lab test(s). Stage moved to LAB."
         )
         db.add(log)
-        
-        # Update patient status for convenience
+
         p = db.query(Patient).filter(Patient.id == patient_id).first()
         if p:
-            p.status = "LAB_IN_PROGRESS"
-        
+            p.status = "LAB_PENDING"
+
         db.commit()
 
-    return added
+    return [_enrich_report(r) for r in added]
 
 
 # ── POST /{id}/upload — Lab Technician only ──────────────────────────────────
@@ -156,7 +159,6 @@ async def upload_lab_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_lab_tech),
 ):
-    """Lab Technician uploads a report for a specific request."""
     report = db.query(LabReport).filter(LabReport.id == report_id).first()
     if not report:
         raise HTTPException(404, "Lab request not found")
@@ -164,13 +166,11 @@ async def upload_lab_report(
     if current_user.role == UserRole.LAB_TECHNICIAN and report.labtech_id != current_user.id:
         raise HTTPException(403, "You can only upload reports for tests assigned to you")
 
-    # Validate file type
     allowed = ["application/pdf", "image/jpeg", "image/png", "image/jpg"]
     content_type = file.content_type or ""
     if content_type not in allowed:
         raise HTTPException(400, "Only PDF and image files (JPG, PNG) are allowed")
 
-    # Save file
     ext = os.path.splitext(file.filename)[1] if file.filename else ".pdf"
     safe_filename = f"{report.report_code}_final{ext}"
     file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
@@ -180,44 +180,48 @@ async def upload_lab_report(
 
     file_type = "pdf" if "pdf" in content_type else "image"
 
-    report.file_path = file_path
-    report.file_type = file_type
-    report.status    = LabStatus.COMPLETED
+    report.file_path  = file_path
+    report.file_type  = file_type
+    report.status     = LabStatus.COMPLETED
     if notes: report.notes = notes
     report.updated_at = datetime.utcnow()
-    
-    # Check if all tests for this patient are done
-    all_done = db.query(LabReport).filter(
-        LabReport.patient_id == report.patient_id, 
-        LabReport.status != LabStatus.COMPLETED
-    ).count() == 1 # 1 because current one is about to be committed? No, count first then update.
-    # Actually, let's just count after committing.
 
     db.commit()
     db.refresh(report)
-    
-    # Check workflow
+
+    # Check if all lab tests for this patient are done
     remaining = db.query(LabReport).filter(
-        LabReport.patient_id == report.patient_id, 
+        LabReport.patient_id == report.patient_id,
         LabReport.status != LabStatus.COMPLETED
     ).count()
-    
+
     if remaining == 0:
-        log = WorkflowLog(
+        # All tests done — log LAB COMPLETED
+        lab_done_log = WorkflowLog(
             patient_id = report.patient_id,
-            stage      = WorkflowStage.DOCTOR,
+            stage      = WorkflowStage.LAB,
             status     = WorkflowStatus.COMPLETED,
             updated_by = current_user.id,
-            notes      = "All lab tests completed. Returned to Doctor."
+            notes      = f"All lab tests completed. Reports available."
         )
-        db.add(log)
-        
+        db.add(lab_done_log)
+
+        # Auto re-add Doctor Visit (PENDING)
+        doc_revisit_log = WorkflowLog(
+            patient_id = report.patient_id,
+            stage      = WorkflowStage.DOCTOR,
+            status     = WorkflowStatus.PENDING,
+            updated_by = current_user.id,
+            notes      = "Lab reports ready. Doctor re-visit automatically scheduled."
+        )
+        db.add(doc_revisit_log)
+
         p = db.query(Patient).filter(Patient.id == report.patient_id).first()
         if p:
             p.status = "LAB_COMPLETED"
         db.commit()
 
-    return report
+    return _enrich_report(report)
 
 
 @router.patch("/{report_id}/status", response_model=LabReportOut)
@@ -227,7 +231,6 @@ def update_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_lab_tech),
 ):
-    """Lab Technician updates test status (e.g. IN_PROGRESS)."""
     report = db.query(LabReport).filter(LabReport.id == report_id).first()
     if not report:
         raise HTTPException(404, "Report not found")
@@ -244,22 +247,21 @@ def update_status(
     if data.notes:
         report.notes = data.notes
     report.updated_at = datetime.utcnow()
-    
-    # Update workflow log if it's In Progress
+
     if new_status == LabStatus.IN_PROGRESS:
         log = WorkflowLog(
-            patient_id = report.patient_id,
-            stage      = WorkflowStage.LAB,
-            status     = WorkflowStatus.IN_PROGRESS,
+            patient_id       = report.patient_id,
+            stage            = WorkflowStage.LAB,
+            status           = WorkflowStatus.IN_PROGRESS,
             assigned_user_id = current_user.id,
-            updated_by = current_user.id,
-            notes      = f"Test {report.test_type} is now in progress."
+            updated_by       = current_user.id,
+            notes            = f"Test {report.test_type} is now in progress by {current_user.full_name}."
         )
         db.add(log)
 
     db.commit()
     db.refresh(report)
-    return report
+    return _enrich_report(report)
 
 
 @router.get("/{report_id}/download")
@@ -268,7 +270,6 @@ def download_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Download/view the actual file."""
     report = db.query(LabReport).filter(LabReport.id == report_id).first()
     if not report:
         raise HTTPException(404, "Report not found")

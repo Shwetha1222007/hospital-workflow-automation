@@ -12,5 +12,12 @@ class Nurse(Base):
     doctor_id  = Column(Integer, ForeignKey("doctors.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user   = relationship("User",   back_populates="nurse_profile")
-    doctor = relationship("Doctor", back_populates="nurses")
+    user     = relationship("User",    back_populates="nurse_profile")
+    doctor   = relationship("Doctor",  back_populates="nurses")
+    patients = relationship(
+        "Patient",
+        back_populates="nurse",
+        foreign_keys="[Patient.nurse_id]",
+        lazy="dynamic",
+    )
+

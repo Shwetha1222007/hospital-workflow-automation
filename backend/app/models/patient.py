@@ -40,8 +40,9 @@ class Patient(Base):
     complaint               = Column(String)
     specialization_required = Column(String)   # auto-detected from complaint
     priority                = Column(String, default="NORMAL")   # NORMAL / EMERGENCY
-    status                  = Column(String, default="PENDING")  # PENDING / IN_PROGRESS / COMPLETED
+    status                  = Column(String, default="PENDING")  # PENDING / IN_PROGRESS / COMPLETED / DISCHARGED
     doctor_id               = Column(Integer, ForeignKey("doctors.id"), nullable=True)
+    nurse_id                = Column(Integer, ForeignKey("nurses.id"), nullable=True)
     diagnosis               = Column(String)        # set by Doctor
     treatment_notes         = Column(String)        # set by Doctor
     created_by              = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -49,8 +50,11 @@ class Patient(Base):
     updated_at              = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     doctor        = relationship("Doctor", back_populates="patients")
+    nurse         = relationship("Nurse",  back_populates="patients", foreign_keys=[nurse_id])
     lab_reports   = relationship("LabReport", back_populates="patient")
     workflow_logs = relationship("WorkflowLog", back_populates="patient", cascade="all, delete-orphan")
+    medications   = relationship("Medication", back_populates="patient")
+    bill          = relationship("Bill", back_populates="patient", uselist=False)
 
 
 def generate_patient_code(session: Session) -> str:
