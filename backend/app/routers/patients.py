@@ -296,34 +296,7 @@ def create_patient(
         updated_by = current_user.id,
         notes      = f"Patient registered by {current_user.full_name}. Complaint: {data.complaint}"
     )
-<<<<<<< HEAD
     db.add(reg_log)
-
-    # DOCTOR ASSIGNED log
-    if assigned_doctor:
-        doc_log = WorkflowLog(
-            patient_id       = patient.id,
-            stage            = WorkflowStage.DOCTOR,
-            status           = WorkflowStatus.ASSIGNED,
-            assigned_user_id = assigned_doctor.user_id,
-            updated_by       = current_user.id,
-            notes            = f"Auto-assigned to Dr. {assigned_doctor.user.full_name} ({spec})"
-        )
-        db.add(doc_log)
-
-    # NURSE ASSIGNED log
-    if assigned_nurse:
-        nurse_log = WorkflowLog(
-            patient_id       = patient.id,
-            stage            = WorkflowStage.NURSE_CARE,
-            status           = WorkflowStatus.ASSIGNED,
-            assigned_user_id = assigned_nurse.user_id,
-            updated_by       = current_user.id,
-            notes            = f"Auto-assigned to Nurse {assigned_nurse.user.full_name}"
-        )
-        db.add(nurse_log)
-=======
-    db.add(initial_log)
 
     # Movement log — Registration (GREEN: patient record created)
     log_movement(
@@ -341,6 +314,16 @@ def create_patient(
 
     # Movement log — Doctor Assignment (BLUE: assigned)
     if assigned_doctor and assigned_doctor.user:
+        doc_log = WorkflowLog(
+            patient_id       = patient.id,
+            stage            = WorkflowStage.DOCTOR,
+            status           = WorkflowStatus.ASSIGNED,
+            assigned_user_id = assigned_doctor.user_id,
+            updated_by       = current_user.id,
+            notes            = f"Auto-assigned to Dr. {assigned_doctor.user.full_name} ({spec})"
+        )
+        db.add(doc_log)
+        
         log_movement(
             db,
             patient_id   = patient.id,
@@ -353,7 +336,19 @@ def create_patient(
             status       = "ASSIGNED",
             color_code   = LogColor.BLUE,
         )
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
+    # NURSE ASSIGNED log
+    if assigned_nurse:
+        nurse_log = WorkflowLog(
+            patient_id       = patient.id,
+            stage            = WorkflowStage.NURSE_CARE,
+            status           = WorkflowStatus.ASSIGNED,
+            assigned_user_id = assigned_nurse.user_id,
+            updated_by       = current_user.id,
+            notes            = f"Auto-assigned to Nurse {assigned_nurse.user.full_name}"
+        )
+        db.add(nurse_log)
+
 
     db.commit()
     return _enrich(patient)
@@ -387,15 +382,10 @@ def update_patient(
             log = WorkflowLog(
                 patient_id = p.id,
                 stage      = WorkflowStage.DOCTOR,
-<<<<<<< HEAD
-                status     = WorkflowStatus.COMPLETED if data.status.upper() in ["COMPLETED", "IN_PROGRESS"] else WorkflowStatus.IN_PROGRESS,
-                updated_by = current_user.id,
-                notes      = f"Doctor {current_user.full_name} consulted patient. Diagnosis entered."
-=======
                 status     = WorkflowStatus.COMPLETED if is_done else WorkflowStatus.IN_PROGRESS,
                 updated_by = current_user.id,
                 notes      = f"Doctor updated status: {old_status} → {p.status}"
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
             )
             db.add(log)
             log_movement(
@@ -458,9 +448,6 @@ def delete_patient(
     db.commit()
 
 
-<<<<<<< HEAD
-# ── GET /{code}/workflow ──────────────────────────────────────────────────────
-=======
 # ── POST /{code}/consultation — Nurse marks consultation done ─────────────────
 
 @router.post("/{patient_code}/consultation", response_model=PatientOut)
@@ -471,7 +458,7 @@ def mark_consultation(
 ):
     """Nurse marks patient consultation as completed."""
     if current_user.role not in [UserRole.NURSE, UserRole.SUPER_ADMIN]:
-        raise HTTPException(403, "Only nurses or admin can mark consultation")
+        raise HTTPException(403, "Only nurses can mark consultation")
     p = db.query(Patient).filter(Patient.patient_code == patient_code).first()
     if not p:
         raise HTTPException(404, f"Patient {patient_code} not found")
@@ -489,7 +476,6 @@ def mark_consultation(
         status       = "COMPLETED",
         color_code   = LogColor.GREEN,
     )
-    db.commit()
     db.commit()
     db.refresh(p)
     return _enrich(p)
@@ -590,7 +576,6 @@ def doctor_prescribe_lab(
     db.refresh(p)
     return _enrich(p)
 
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
 
 @router.get("/{patient_code}/workflow", response_model=List[WorkflowLogOut])
 def get_patient_workflow(
@@ -603,7 +588,6 @@ def get_patient_workflow(
         raise HTTPException(404, f"Patient {patient_code} not found")
 
     logs = db.query(WorkflowLog).filter(WorkflowLog.patient_id == p.id).order_by(WorkflowLog.timestamp.asc()).all()
-<<<<<<< HEAD
 
     result = []
     for log in logs:
@@ -622,8 +606,6 @@ def get_patient_workflow(
         )
         result.append(out)
     return result
-=======
-    return logs
 
 
 # ── GET /me — Patient views their own record ─────────────────────────────────
@@ -640,4 +622,4 @@ def get_my_patient_profile(
     if not link or not link.patient:
         raise HTTPException(404, "No patient record linked to your account")
     return _enrich(link.patient)
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+

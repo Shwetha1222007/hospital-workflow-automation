@@ -12,10 +12,8 @@ class UserRole(str, enum.Enum):
     LAB_TECHNICIAN  = "LAB_TECHNICIAN"
     PHARMACIST      = "PHARMACIST"
     BILLING         = "BILLING"
-<<<<<<< HEAD
-=======
     PATIENT         = "PATIENT"
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
 
 
 class User(Base):

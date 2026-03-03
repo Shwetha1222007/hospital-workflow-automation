@@ -57,7 +57,6 @@ def require_lab_tech(u: User = Depends(get_current_user)):
         raise HTTPException(403, "Lab Technician access required")
     return u
 
-<<<<<<< HEAD
 def require_pharmacist(u: User = Depends(get_current_user)):
     if u.role not in [UserRole.PHARMACIST, UserRole.SUPER_ADMIN]:
         raise HTTPException(403, "Pharmacist access required")
@@ -66,9 +65,10 @@ def require_pharmacist(u: User = Depends(get_current_user)):
 def require_billing(u: User = Depends(get_current_user)):
     if u.role not in [UserRole.BILLING, UserRole.SUPER_ADMIN]:
         raise HTTPException(403, "Billing access required")
-=======
+    return u
+
 def require_patient(u: User = Depends(get_current_user)):
     if u.role not in [UserRole.PATIENT, UserRole.SUPER_ADMIN]:
         raise HTTPException(403, "Patient access required")
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
     return u
+

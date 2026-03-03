@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { authAxios } from "../context/AuthContext";
+import Navbar from "../components/Navbar";
 
-const token = () => localStorage.getItem("token");
-const hdr = () => ({ Authorization: `Bearer ${token()}` });
-
-const PRIORITY_COLOR = { NORMAL: "#22c55e", EMERGENCY: "#ef4444" };
+const PRIORITY_COLOR = { NORMAL: "#22c55e", URGET: "#f59e0b", EMERGENCY: "#ef4444" };
 const STATUS_MAP = {
-    PENDING: ["#64748b", "Pending"],
-    IN_PROGRESS: ["#f59e0b", "In Progress"],
-    COMPLETED: ["#22c55e", "Completed"],
+    PENDING: ["#64748b", "Pending Admission"],
+    IN_PROGRESS: ["#f59e0b", "Admitted"],
     DOCTOR_VISITED: ["#00d4ff", "Doctor Visited"],
     LAB_PENDING: ["#a855f7", "Lab Pending"],
-    LAB_COMPLETED: ["#22c55e", "Lab Completed"],
-    PHARMACY_PENDING: ["#f97316", "Pharmacy Pending"],
-    BILLING_PENDING: ["#ec4899", "Billing Pending"],
-    BILL_PAID: ["#22c55e", "Bill Paid"],
-    DISCHARGED: ["#22c55e", "Discharged ✓"],
+    LAB_COMPLETED: ["#10b981", "Lab Results Ready"],
+    PHARMACY_PENDING: ["#f97316", "Pharmacy Needed"],
+    BILLING_PENDING: ["#ec4899", "Awaiting Billing"],
+    BILL_PAID: ["#10b981", "Bill Paid"],
+    DISCHARGE_PENDING: ["#ef4444", "Ready for Discharge"],
+    DISCHARGED: ["#10b981", "Discharged ✓"],
 };
 
 const TEST_OPTIONS = [
@@ -26,7 +24,7 @@ const TEST_OPTIONS = [
     "COVID RT-PCR", "Urine Culture", "Stool Test", "Pregnancy Test",
 ];
 
-const COLOR_MAP = {
+const BOARD_COLORS = {
     RED: { bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.35)", text: "#ef4444" },
     GREEN: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.35)", text: "#22c55e" },
     YELLOW: { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.35)", text: "#f59e0b" },
@@ -36,19 +34,8 @@ const COLOR_MAP = {
 function StatusBadge({ status }) {
     const [color, label] = STATUS_MAP[status] || ["#64748b", status];
     return (
-<<<<<<< HEAD
-        <span style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-            color, background: `${color}18`, border: `1px solid ${color}44`,
-            fontFamily: "monospace",
-        }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: color }} />
-            {label}
-=======
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: cfg[0], background: cfg[1], border: `1px solid ${cfg[0]}33` }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg[0] }} /> {cfg[2]}
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color, background: `${color}18`, border: `1px solid ${color}44`, fontFamily: "monospace" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: color }} /> {label}
         </span>
     );
 }
@@ -57,150 +44,12 @@ function PriorityBadge({ priority }) {
     const p = (priority || "NORMAL").toUpperCase();
     const color = PRIORITY_COLOR[p] || "#22c55e";
     return (
-<<<<<<< HEAD
-        <span style={{
-            fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 6,
-            color, background: `${color}15`, border: `1px solid ${color}33`, fontFamily: "monospace",
-        }}>
-=======
-        <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 6, color, background: `${color}15`, border: `1px solid ${color}33` }}>
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+        <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 6, color, background: `${color}15`, border: `1px solid ${color}33`, fontFamily: "monospace" }}>
             {p === "EMERGENCY" ? "🚨 " : ""}{p}
         </span>
     );
 }
 
-<<<<<<< HEAD
-function Toast({ msg, isError, onClose }) {
-    useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, []);
-    return (
-        <div style={{
-            position: "fixed", bottom: 28, right: 28, zIndex: 9999,
-            background: isError ? "rgba(239,68,68,0.15)" : "rgba(34,197,94,0.15)",
-            border: `1px solid ${isError ? "#ef444455" : "#22c55e55"}`,
-            borderRadius: 12, padding: "14px 22px",
-            color: isError ? "#ef4444" : "#22c55e",
-            fontWeight: 600, fontSize: 13, backdropFilter: "blur(20px)",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.4)", maxWidth: 360,
-        }}>
-            {msg}
-        </div>
-    );
-}
-
-// ── Action Panels ─────────────────────────────────────────────────────────────
-
-function MarkDoctorVisited({ patient, onDone, showToast }) {
-    const [loading, setLoading] = useState(false);
-    const handle = async () => {
-        setLoading(true);
-        try {
-            await axios.post(`${API}/nurse/${patient.patient_code}/mark-doctor-visited`, {}, { headers: hdr() });
-            showToast("✅ Doctor visit marked successfully!");
-            onDone();
-        } catch (e) { showToast(e.response?.data?.detail || "Failed", true); }
-        finally { setLoading(false); }
-    };
-    return (
-        <div style={{ padding: "16px 0" }}>
-            <p style={{ color: "#a0b8d0", fontSize: 13, marginBottom: 16 }}>
-                Mark that Dr. {patient.doctor_name || "Doctor"} has visited and consulted this patient.
-            </p>
-            <button onClick={handle} disabled={loading} style={{
-                padding: "12px 28px", borderRadius: 10, background: "linear-gradient(135deg,#00d4ff,#0099bb)",
-                color: "#060b14", fontWeight: 800, fontSize: 14, border: "none", cursor: "pointer",
-                opacity: loading ? 0.7 : 1,
-            }}>
-                {loading ? "Marking..." : "✅ Mark Doctor Visited"}
-            </button>
-        </div>
-    );
-}
-
-function AddLabTests({ patient, onDone, showToast }) {
-    const [selected, setSelected] = useState([]);
-    const [custom, setCustom] = useState("");
-    const [loading, setLoading] = useState(false);
-
-    const toggleTest = (t) => setSelected(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t]);
-    const addCustom = () => { if (custom.trim()) { setSelected(s => [...s, custom.trim()]); setCustom(""); } };
-
-    const handle = async () => {
-        if (selected.length === 0) { showToast("Select at least one test", true); return; }
-        setLoading(true);
-        try {
-            await axios.post(
-                `${API}/nurse/${patient.patient_code}/add-lab-tests`,
-                selected.map(t => ({ test_type: t })),
-                { headers: hdr() }
-            );
-            showToast(`✅ ${selected.length} lab test(s) added!`);
-            onDone();
-        } catch (e) { showToast(e.response?.data?.detail || "Failed", true); }
-        finally { setLoading(false); }
-    };
-
-    return (
-        <div>
-            <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "monospace" }}>
-                    Select Lab Tests
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {TEST_OPTIONS.map(t => (
-                        <button key={t} onClick={() => toggleTest(t)} style={{
-                            padding: "7px 14px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                            background: selected.includes(t) ? "rgba(168,85,247,0.2)" : "#0d1526",
-                            color: selected.includes(t) ? "#a855f7" : "#5a7aa0",
-                            border: `1px solid ${selected.includes(t) ? "#a855f744" : "#1e2d4a"}`,
-                            transition: "all 0.15s",
-                        }}>
-                            {selected.includes(t) ? "✓ " : ""}{t}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                <input
-                    value={custom} onChange={e => setCustom(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && addCustom()}
-                    placeholder="Custom test name..."
-                    style={{ flex: 1, background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: "10px 14px", borderRadius: 8, outline: "none", fontSize: 13 }}
-                />
-                <button onClick={addCustom} style={{ padding: "10px 16px", borderRadius: 8, background: "#a855f722", border: "1px solid #a855f733", color: "#a855f7", cursor: "pointer", fontWeight: 700 }}>
-                    + Add
-                </button>
-            </div>
-
-            {selected.length > 0 && (
-                <div style={{ background: "#060b14", border: "1px solid #1e2d4a", borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 8, fontFamily: "monospace", textTransform: "uppercase" }}>
-                        Selected ({selected.length}):
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {selected.map(t => (
-                            <span key={t} style={{
-                                display: "inline-flex", alignItems: "center", gap: 6,
-                                padding: "4px 12px", borderRadius: 20, background: "rgba(168,85,247,0.1)",
-                                border: "1px solid #a855f733", color: "#a855f7", fontSize: 12,
-                            }}>
-                                🧪 {t}
-                                <button onClick={() => setSelected(s => s.filter(x => x !== t))} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: 0, fontSize: 13, lineHeight: 1 }}>×</button>
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            <button onClick={handle} disabled={loading || selected.length === 0} style={{
-                padding: "12px 28px", borderRadius: 10, background: "linear-gradient(135deg,#a855f7,#7c3aed)",
-                color: "#fff", fontWeight: 800, fontSize: 14, border: "none", cursor: "pointer",
-                opacity: loading || selected.length === 0 ? 0.5 : 1,
-            }}>
-                {loading ? "Sending..." : `🧪 Send ${selected.length} Test(s) to Lab`}
-            </button>
-=======
 function TimelinePanel({ patientId }) {
     const [data, setData] = useState(null);
 
@@ -210,583 +59,185 @@ function TimelinePanel({ patientId }) {
             .catch(() => setData({ steps: [] }));
     }, [patientId]);
 
-    if (!data) return <div style={{ padding: 12, color: "#00d4ff", fontSize: 12 }}>Loading…</div>;
-    if (data.steps.length === 0) return <div style={{ padding: 12, color: "#5a7aa0", fontSize: 12 }}>No timeline events yet.</div>;
+    if (!data) return <div style={{ color: "#00d4ff", fontSize: 12, padding: 12 }}>Loading timeline…</div>;
 
     return (
-        <div style={{ padding: "16px 16px 0", borderTop: "1px solid #1e2d4a" }}>
-            <div style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, fontWeight: 700 }}>Workflow Timeline</div>
+        <div style={{ padding: 24, background: "rgba(0,0,0,0.2)", borderTop: "1px solid #1e2d4a" }}>
+            <h4 style={{ margin: "0 0 16px", fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", letterSpacing: 1.2 }}>Workflow Timeline</h4>
             {data.steps.map((step, idx) => {
-                const cm = COLOR_MAP[step.color_code] || COLOR_MAP.YELLOW;
+                const cm = BOARD_COLORS[step.color_code] || BOARD_COLORS.YELLOW;
                 return (
-                    <div key={idx} style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                    <div key={idx} style={{ display: "flex", gap: 14, marginBottom: 18 }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: cm.text, flexShrink: 0, marginTop: 3 }} />
-                            {idx < data.steps.length - 1 && <div style={{ width: 2, flex: 1, background: "#1e2d4a", marginTop: 3 }} />}
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: cm.text, flexShrink: 0, marginTop: 4 }} />
+                            {idx < data.steps.length - 1 && <div style={{ width: 2, flex: 1, background: "#1e2d4a", marginTop: 4 }} />}
                         </div>
-                        <div style={{ paddingBottom: 10 }}>
-                            <div style={{ color: "#e2eaf5", fontSize: 12, fontWeight: 600 }}>{step.action}</div>
-                            {step.actor_name && <div style={{ color: "#5a7aa0", fontSize: 11 }}>by {step.actor_name}</div>}
-                            <div style={{ color: "#4a6a8a", fontSize: 10, marginTop: 2 }}>{new Date(step.timestamp).toLocaleString()}</div>
+                        <div>
+                            <div style={{ color: "#e2eaf5", fontSize: 13, fontWeight: 600 }}>{step.action}</div>
+                            <div style={{ color: "#5a7aa0", fontSize: 11 }}>{new Date(step.timestamp).toLocaleString()} {step.actor_name && `· ${step.actor_name}`}</div>
                         </div>
                     </div>
                 );
             })}
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
         </div>
     );
 }
 
-<<<<<<< HEAD
-const COMMON_MEDS = [
-    { drug_name: "Paracetamol", dosage: "500mg", frequency: "3x daily", duration: "3 days", price: "50" },
-    { drug_name: "Amoxicillin", dosage: "250mg", frequency: "2x daily", duration: "5 days", price: "80" },
-    { drug_name: "Ibuprofen", dosage: "400mg", frequency: "2x daily", duration: "3 days", price: "60" },
-    { drug_name: "Cetirizine", dosage: "10mg", frequency: "Once daily", duration: "5 days", price: "40" },
-    { drug_name: "Omeprazole", dosage: "20mg", frequency: "Once daily", duration: "7 days", price: "70" },
-    { drug_name: "Azithromycin", dosage: "500mg", frequency: "Once daily", duration: "3 days", price: "120" },
-];
-
-function AddMedication({ patient, onDone, showToast }) {
-    const [meds, setMeds] = useState([{ drug_name: "", dosage: "", frequency: "", duration: "", price: "0" }]);
+// ── Action Components ────────────────────────────────────────────────────────
+function AddLabTestsPanel({ patient, onDone, showToast }) {
+    const [selected, setSelected] = useState([]);
+    const [custom, setCustom] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const addRow = () => setMeds(m => [...m, { drug_name: "", dosage: "", frequency: "", duration: "", price: "0" }]);
-    const rmRow = (i) => setMeds(m => m.filter((_, idx) => idx !== i));
-    const upd = (i, k, v) => setMeds(m => m.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
-    const fillCommon = (preset) => setMeds(m => [...m.filter(r => r.drug_name), { ...preset }]);
-
+    const toggleTest = (t) => setSelected(s => s.includes(t) ? s.filter(x => x !== t) : [...s, t]);
     const handle = async () => {
-        const valid = meds.filter(m => m.drug_name.trim());
-        if (!valid.length) { showToast("Add at least one medication", true); return; }
+        if (!selected.length && !custom.trim()) return showToast("Select tests", true);
         setLoading(true);
         try {
-            await axios.post(
-                `${API}/nurse/${patient.patient_code}/prescribe-medication`,
-                { medications: valid },
-                { headers: hdr() }
-            );
-            showToast("✅ Medication prescribed! Sent to Pharmacy.");
+            const tests = [...selected];
+            if (custom.trim()) tests.push(custom.trim());
+            await authAxios().post("/lab-reports/assign", tests.map(t => ({ patient_id: patient.id, test_type: t })));
+            showToast(`✅ ${tests.length} test(s) assigned to lab`);
             onDone();
-        } catch (e) { showToast(e.response?.data?.detail || "Failed", true); }
+        } catch { showToast("Failed to assign lab tests", true); }
         finally { setLoading(false); }
     };
 
     return (
         <div>
-            <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: "#4a6a8a", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "monospace" }}>
-                    Quick Add Common Medicines
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {COMMON_MEDS.map(med => (
-                        <button key={med.drug_name} onClick={() => fillCommon(med)} style={{
-                            padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                            background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)",
-                            color: "#f59e0b", transition: "all 0.15s",
-                        }}>
-                            + {med.drug_name}
-                        </button>
-                    ))}
-                </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                {TEST_OPTIONS.map(o => (
+                    <button key={o} onClick={() => toggleTest(o)} style={{ padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 12, background: selected.includes(o) ? "rgba(168,85,247,0.2)" : "#060b14", border: `1px solid ${selected.includes(o) ? "#a855f7" : "#1e2d4a"}`, color: selected.includes(o) ? "#a855f7" : "#5a7aa0" }}>{o}</button>
+                ))}
             </div>
-
-            {meds.map((m, i) => (
-                <div key={i} style={{
-                    background: "#060b14", border: "1px solid #1e2d4a", borderRadius: 10,
-                    padding: "14px 16px", marginBottom: 10, display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr 1fr 80px 32px", gap: 10, alignItems: "center",
-                }}>
-                    <input value={m.drug_name} onChange={e => upd(i, "drug_name", e.target.value)}
-                        placeholder="Medicine Name *" style={{ background: "#0d1526", border: "1px solid #1e2d4a", color: "#fff", padding: "8px 12px", borderRadius: 7, outline: "none", fontSize: 13 }} />
-                    <input value={m.dosage} onChange={e => upd(i, "dosage", e.target.value)}
-                        placeholder="Dosage" style={{ background: "#0d1526", border: "1px solid #1e2d4a", color: "#fff", padding: "8px 12px", borderRadius: 7, outline: "none", fontSize: 13 }} />
-                    <input value={m.frequency} onChange={e => upd(i, "frequency", e.target.value)}
-                        placeholder="Frequency" style={{ background: "#0d1526", border: "1px solid #1e2d4a", color: "#fff", padding: "8px 12px", borderRadius: 7, outline: "none", fontSize: 13 }} />
-                    <input value={m.duration} onChange={e => upd(i, "duration", e.target.value)}
-                        placeholder="Duration" style={{ background: "#0d1526", border: "1px solid #1e2d4a", color: "#fff", padding: "8px 12px", borderRadius: 7, outline: "none", fontSize: 13 }} />
-                    <input value={m.price} onChange={e => upd(i, "price", e.target.value)}
-                        placeholder="₹" type="number" style={{ background: "#0d1526", border: "1px solid #1e2d4a", color: "#f59e0b", padding: "8px 10px", borderRadius: 7, outline: "none", fontSize: 13 }} />
-                    {meds.length > 1 && (
-                        <button onClick={() => rmRow(i)} style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#ef4444", padding: "8px", borderRadius: 7, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
-                    )}
-                </div>
-            ))}
-
-            <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                <button onClick={addRow} style={{
-                    padding: "10px 20px", borderRadius: 9, background: "transparent",
-                    border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b", cursor: "pointer", fontSize: 12, fontWeight: 700,
-                }}>
-                    + Add Row
-                </button>
-                <button onClick={handle} disabled={loading} style={{
-                    padding: "10px 24px", borderRadius: 9, background: "linear-gradient(135deg,#f59e0b,#d97706)",
-                    color: "#000", fontWeight: 800, fontSize: 13, border: "none", cursor: "pointer",
-                    opacity: loading ? 0.7 : 1,
-                }}>
-                    {loading ? "Sending..." : "💊 Send to Pharmacy"}
-                </button>
-            </div>
+            <input value={custom} onChange={e => setCustom(e.target.value)} placeholder="Custom test…" style={{ background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: 12, borderRadius: 8, width: "100%", outline: "none", marginBottom: 16 }} />
+            <button onClick={handle} disabled={loading} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#a855f7", color: "#fff", fontWeight: 800, border: "none", cursor: "pointer" }}>{loading ? "Assigning..." : "Assign to Lab Tech"}</button>
         </div>
     );
 }
 
-function DischargePatient({ patient, onDone, showToast }) {
+function AddMedsPanel({ patient, onDone, showToast }) {
+    const [meds, setMeds] = useState("");
     const [loading, setLoading] = useState(false);
-    const [confirm, setConfirm] = useState(false);
-
     const handle = async () => {
+        if (!meds.trim()) return showToast("Enter medication", true);
         setLoading(true);
         try {
-            await axios.post(`${API}/nurse/${patient.patient_code}/discharge`, {}, { headers: hdr() });
-            showToast("✅ Patient discharged successfully!");
+            await authAxios().post("/pharmacy/prescribe", [{ patient_id: patient.id, medicine_name: meds, dosage: "As prescribed", duration: "Until finished" }]);
+            showToast("✅ Medication order sent to Pharmacy");
             onDone();
-        } catch (e) { showToast(e.response?.data?.detail || "Failed", true); }
+        } catch { showToast("Failed to prescribe meds", true); }
         finally { setLoading(false); }
     };
-
     return (
-        <div style={{ padding: "16px 0" }}>
-            <p style={{ color: "#a0b8d0", fontSize: 13, marginBottom: 16 }}>
-                This will mark the patient as discharged and complete the hospital workflow.
-                Ensure billing is cleared before discharging.
-            </p>
-            {!confirm ? (
-                <button onClick={() => setConfirm(true)} style={{
-                    padding: "12px 28px", borderRadius: 10, background: "rgba(239,68,68,0.1)",
-                    color: "#ef4444", fontWeight: 800, fontSize: 14, border: "1px solid rgba(239,68,68,0.35)", cursor: "pointer",
-                }}>
-                    🚪 Discharge Patient
-                </button>
-            ) : (
-                <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 10, padding: 16 }}>
-                    <p style={{ color: "#ef4444", fontWeight: 700, marginBottom: 12 }}>⚠️ Confirm discharge for {patient.name}?</p>
-                    <div style={{ display: "flex", gap: 10 }}>
-                        <button onClick={handle} disabled={loading} style={{ padding: "10px 22px", borderRadius: 8, background: "#ef4444", color: "#fff", fontWeight: 800, border: "none", cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
-                            {loading ? "..." : "Yes, Discharge"}
-                        </button>
-                        <button onClick={() => setConfirm(false)} style={{ padding: "10px 22px", borderRadius: 8, background: "transparent", color: "#5a7aa0", border: "1px solid #1e2d4a", cursor: "pointer", fontWeight: 700 }}>
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            )}
+        <div>
+            <textarea rows={4} value={meds} onChange={e => setMeds(e.target.value)} placeholder="Enter medicines, e.g. Paracetamol 500mg (3x daily)..." style={{ background: "#060b14", border: "1px solid #1e2d4a", color: "#fff", padding: 12, borderRadius: 8, width: "100%", outline: "none", marginBottom: 16, resize: "none" }} />
+            <button onClick={handle} disabled={loading} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#f59e0b", color: "#000", fontWeight: 800, border: "none", cursor: "pointer" }}>{loading ? "Ordering..." : "Send to Pharmacy Market"}</button>
         </div>
     );
 }
 
-// ── Main Nurse Dashboard ───────────────────────────────────────────────────────
-
-const ACTIONS = [
-    { id: "visit", label: "Mark Doctor Visited", icon: "🩺", color: "#00d4ff" },
-    { id: "lab", label: "Add Lab Tests", icon: "🧪", color: "#a855f7" },
-    { id: "meds", label: "Prescribe Medication", icon: "💊", color: "#f59e0b" },
-    { id: "discharge", label: "Discharge Patient", icon: "🚪", color: "#ef4444" },
-];
-
 export default function NurseDashboard({ user, onLogout }) {
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [selectedPat, setSelectedPat] = useState(null);
-    const [actionType, setActionType] = useState(null);
-    const [filter, setFilter] = useState("ALL");
     const [toast, setToast] = useState(null);
-    const tkn = localStorage.getItem("token");
+    const [filter, setFilter] = useState("ALL");
+    const [action, setAction] = useState(null);
+    const [expanded, setExpanded] = useState(null);
 
-    const fetchData = async () => {
-        try {
-            const res = await axios.get(`${API}/patients/`, { headers: { Authorization: `Bearer ${tkn}` } });
-=======
-export default function NurseDashboard({ user, onLogout }) {
-    const [patients, setPatients] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState("ALL");
-    const [expandedTimeline, setExpandedTimeline] = useState(null);
-    const [labAssign, setLabAssign] = useState({}); // { patientId: "blood test, ecg" }
-    const [toast, setToast] = useState("");
+    const showToast = (msg, isError) => { setToast({ msg, isError }); setTimeout(() => setToast(null), 3500); };
 
-    const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
-
-    const fetchData = async () => {
+    const loadPatients = async () => {
         try {
             const res = await authAxios().get("/patients/");
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
             setPatients(res.data);
-        } catch (err) { console.error(err); }
+        } catch { }
         finally { setLoading(false); }
     };
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { loadPatients(); }, []);
 
-<<<<<<< HEAD
-    const showToast = (msg, isError = false) => setToast({ msg, isError });
-
-    const filtered = filter === "ALL" ? patients : patients.filter(p => p.status === filter);
-
-    const openAction = (patient, action) => {
-        setSelectedPat(patient);
-        setActionType(action);
-=======
-    const updateStatus = async (pcode, newStatus) => {
+    const updateStatus = async (pat, status, actionMsg) => {
         try {
-            await authAxios().patch(`/patients/${pcode}`, { status: newStatus });
-            showToast(`✅ Status updated to ${newStatus}`);
-            fetchData();
-        } catch { showToast("❌ Status update failed"); }
+            await authAxios().patch(`/patients/${pat.patient_code}`, { status });
+            if (actionMsg) await authAxios().post("/movement-logs/nurse-action", { patient_id: pat.id, action: actionMsg });
+            showToast(`✅ Patient marked as ${status.replace("_", " ")}`);
+            loadPatients();
+        } catch { showToast("Failed to update status", true); }
     };
 
-    const nurseAction = async (patientId, action) => {
-        try {
-            await authAxios().post("/movement-logs/nurse-action", { patient_id: patientId, action });
-            showToast(`✅ Logged: ${action}`);
-            fetchData();
-            if (expandedTimeline === patientId) {
-                setExpandedTimeline(null);
-                setTimeout(() => setExpandedTimeline(patientId), 50);
-            }
-        } catch (err) { showToast("❌ " + (err?.response?.data?.detail || "Action failed")); }
-    };
-
-    const assignLabTests = async (p) => {
-        const tests = (labAssign[p.id] || "").split(",").map(t => t.trim()).filter(Boolean);
-        if (tests.length === 0) return showToast("⚠️ Enter at least one test");
-        try {
-            await authAxios().post("/lab-reports/assign", tests.map(t => ({ patient_id: p.id, test_type: t })));
-            showToast(`✅ ${tests.length} Lab Test(s) Assigned`);
-            setLabAssign(prev => ({ ...prev, [p.id]: "" }));
-            fetchData();
-        } catch (err) { showToast("❌ " + (err?.response?.data?.detail || "Assignment failed")); }
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
-    };
-
-    const closeModal = () => { setSelectedPat(null); setActionType(null); };
-
-    const onActionDone = () => {
-        closeModal();
-        fetchData();
-    };
+    const filtered = patients.filter(p => filter === "ALL" || p.status === filter);
 
     const s = {
-        wrap: { minHeight: "100vh", background: "#060b14", color: "#e2eaf5", fontFamily: "'DM Sans', sans-serif" },
-<<<<<<< HEAD
-        container: { maxWidth: 1300, margin: "0 auto", padding: "32px 28px" },
-        card: { background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 16, padding: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.3)" },
-        patCard: {
-            background: "#060b14", border: "1px solid #1e2d4a", borderRadius: 14,
-            padding: "20px 22px", marginBottom: 14, transition: "all 0.2s",
-        },
-=======
-        container: { maxWidth: 1100, margin: "0 auto", padding: 40 },
-        card: { background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 14, marginBottom: 16 },
-        header: { display: "flex", alignContent: "center", justifyContent: "space-between", padding: "18px 32px", background: "rgba(0,0,0,0.4)", borderBottom: "1px solid #1e2d4a" },
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+        wrap: { minHeight: "100vh", background: "#060b14", color: "#e2eaf5", fontFamily: "'Inter', sans-serif" },
+        container: { maxWidth: 1100, margin: "0 auto", padding: 32 },
+        card: { background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 16, marginBottom: 16, overflow: "hidden" },
+        btn: (bg, clr) => ({ padding: "8px 16px", borderRadius: 8, background: bg, border: "none", color: clr, fontWeight: 700, cursor: "pointer", fontSize: 12 }),
     };
 
     return (
         <div style={s.wrap}>
-            {/* Top Bar */}
-            <div style={s.header}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 32, height: 32, background: "#00d4ff", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontWeight: 800 }}>+</div>
-                    <span style={{ fontWeight: 700, color: "#00d4ff", fontSize: 16 }}>MedFlow</span>
-                    <span style={{ color: "#5a7aa0", fontSize: 12, marginLeft: 4 }}>/ Nurse Dashboard</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ color: "#e2eaf5", fontSize: 13, fontWeight: 600 }}>{user.name}</div>
-                    <button onClick={onLogout} style={{ padding: "7px 16px", borderRadius: 8, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Sign Out</button>
-                </div>
-            </div>
+            <Navbar user={{ ...user, role: "NURSE" }} onLogout={onLogout} />
 
-            {toast && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 999, background: "rgba(0,212,255,0.12)", border: "1px solid rgba(0,212,255,0.2)", borderRadius: 12, padding: "12px 20px", color: "#00d4ff", fontWeight: 600, fontSize: 13 }}>{toast}</div>}
+            {toast && <div style={{ position: "fixed", top: 20, right: 20, zIndex: 1000, background: toast.isError ? "#ef444415" : "#00d4ff15", border: `1px solid ${toast.isError ? "#ef4444" : "#00d4ff"}44`, padding: "12px 24px", borderRadius: 12, color: toast.isError ? "#ef4444" : "#00d4ff", fontWeight: 700, backdropFilter: "blur(10px)" }}>{toast.msg}</div>}
 
             <div style={s.container}>
-<<<<<<< HEAD
-                {/* Header */}
-                <div style={{ marginBottom: 32 }}>
-                    <div style={{ fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 4, fontWeight: 700, fontFamily: "monospace" }}>
-                        Nurse Dashboard
-                    </div>
-                    <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 800 }}>Patient Care Portal 👩‍⚕️</h1>
-                    <div style={{ color: "#5a7aa0", fontSize: 14 }}>
-                        Assigned Doctor: <strong style={{ color: "#f59e0b" }}>{patients[0]?.doctor_name || "—"}</strong>
-                        &nbsp;·&nbsp; {patients.length} patients
-                    </div>
-                </div>
-
-                {/* Stats */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
-                    {[
-                        { label: "Total", value: patients.length, color: "#00d4ff" },
-                        { label: "Pending", value: patients.filter(p => p.status === "PENDING").length, color: "#64748b" },
-                        { label: "In Progress", value: patients.filter(p => ["IN_PROGRESS", "DOCTOR_VISITED", "LAB_PENDING"].includes(p.status)).length, color: "#f59e0b" },
-                        { label: "Lab / Pharmacy", value: patients.filter(p => ["LAB_PENDING", "LAB_COMPLETED", "PHARMACY_PENDING"].includes(p.status)).length, color: "#a855f7" },
-                        { label: "Discharged", value: patients.filter(p => p.status === "DISCHARGED").length, color: "#22c55e" },
-                    ].map(stat => (
-                        <div key={stat.label} style={{
-                            background: "#0d1526", border: "1px solid rgba(0,212,255,0.08)",
-                            borderRadius: 14, padding: "18px 16px", textAlign: "center",
-                        }}>
-                            <div style={{ fontSize: 28, fontWeight: 700, color: stat.color, fontFamily: "monospace" }}>{stat.value}</div>
-                            <div style={{ fontSize: 12, color: "#5a7aa0", marginTop: 2 }}>{stat.label}</div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Filter */}
-                <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-                    {["ALL", "PENDING", "IN_PROGRESS", "DOCTOR_VISITED", "LAB_PENDING", "PHARMACY_PENDING", "DISCHARGED"].map(st => (
-                        <button key={st} onClick={() => setFilter(st)} style={{
-                            padding: "8px 16px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                            background: filter === st ? "#f59e0b22" : "#0d1526",
-                            border: `1px solid ${filter === st ? "#f59e0b44" : "#1e2d4a"}`,
-                            color: filter === st ? "#f59e0b" : "#5a7aa0", transition: "0.15s",
-                        }}>
-                            {st.replace(/_/g, " ")}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Patient Cards */}
-                {loading ? (
-                    <div style={{ color: "#f59e0b", fontFamily: "monospace", textAlign: "center", padding: 60 }}>Loading patients...</div>
-                ) : filtered.length === 0 ? (
-                    <div style={{ ...s.card, textAlign: "center", padding: 60, color: "#5a7aa0" }}>
-                        <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
-                        <div>No patients in this filter</div>
-                    </div>
-                ) : (
-                    filtered.map(p => (
-                        <div key={p.id} style={s.patCard}>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 16, alignItems: "center" }}>
-                                {/* Info */}
-                                <div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                        <span style={{ fontFamily: "monospace", color: "#00d4ff", fontWeight: 700, fontSize: 14 }}>{p.patient_code}</span>
-                                        <PriorityBadge priority={p.priority} />
-                                    </div>
-                                    <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{p.name}</div>
-                                    <div style={{ fontSize: 12, color: "#4a6a8a" }}>{p.age}y · {p.gender} · {p.specialization_required}</div>
-                                </div>
-
-                                {/* Complaint + Status */}
-                                <div>
-                                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 4, textTransform: "uppercase", fontFamily: "monospace" }}>Complaint</div>
-                                    <div style={{ fontSize: 13, color: "#a0b8d0", fontStyle: "italic", marginBottom: 8 }}>"{p.complaint}"</div>
-                                    <StatusBadge status={p.status} />
-                                </div>
-
-                                {/* Doctor */}
-                                <div>
-                                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 4, textTransform: "uppercase", fontFamily: "monospace" }}>Assigned Doctor</div>
-                                    <div style={{ fontSize: 14, fontWeight: 600, color: "#22c55e" }}>👨‍⚕️ {p.doctor_name || "—"}</div>
-                                    {p.nurse_name && <div style={{ fontSize: 12, color: "#f59e0b", marginTop: 3 }}>👩‍⚕️ {p.nurse_name}</div>}
-                                </div>
-
-                                {/* Action Buttons */}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {ACTIONS.map(act => {
-                                        const disabled = p.status === "DISCHARGED" && act.id !== "discharge";
-                                        return (
-                                            <button key={act.id} onClick={() => openAction(p, act.id)}
-                                                disabled={disabled}
-                                                style={{
-                                                    padding: "8px 16px", borderRadius: 9, fontSize: 12, fontWeight: 700,
-                                                    background: `${act.color}15`, border: `1px solid ${act.color}44`,
-                                                    color: act.color, cursor: disabled ? "not-allowed" : "pointer",
-                                                    opacity: disabled ? 0.4 : 1, transition: "0.15s", whiteSpace: "nowrap",
-                                                }}>
-                                                {act.icon} {act.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    ))
-=======
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 32 }}>
                     <div>
-                        <div style={{ fontSize: 11, color: "#00d4ff", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, fontWeight: 700 }}>Care Portal</div>
-                        <h1 style={{ margin: 0, fontSize: 26 }}>My Assigned Patients</h1>
-                        <div style={{ color: "#5a7aa0", fontSize: 13, marginTop: 4 }}>{filtered.length} patient(s) under your care</div>
+                        <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900 }}>Wards & Triage 👩‍⚕️</h1>
+                        <p style={{ color: "#5a7aa0", marginTop: 4 }}>Track patient workflow, coordinate with doctors and departments.</p>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                        {["ALL", "PENDING", "IN_PROGRESS", "COMPLETED"].map(st => (
-                            <button key={st} onClick={() => setFilterStatus(st)} style={{ padding: "8px 14px", borderRadius: 9, background: filterStatus === st ? "#00d4ff15" : "#0d1526", border: `1px solid ${filterStatus === st ? "#00d4ff44" : "#1e2d4a"}`, color: filterStatus === st ? "#00d4ff" : "#5a7aa0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                                {st.replace("_", " ")}
-                            </button>
+                        {["ALL", "PENDING", "IN_PROGRESS", "LAB_PENDING", "PHARMACY_PENDING"].map(f => (
+                            <button key={f} onClick={() => setFilter(f)} style={{ padding: "8px 12px", borderRadius: 20, fontSize: 11, background: filter === f ? "#00d4ff15" : "#0d1526", border: `1px solid ${filter === f ? "#00d4ff" : "#1e2d4a"}`, color: filter === f ? "#00d4ff" : "#5a7aa0", cursor: "pointer", fontWeight: 700 }}>{f.replace("_", " ")}</button>
                         ))}
                     </div>
                 </div>
 
-                {loading ? <div style={{ color: "#00d4ff", fontFamily: "monospace" }}>Loading patients…</div> : (
-                    filtered.length === 0 ? (
-                        <div style={{ ...s.card, textAlign: "center", padding: 60, color: "#5a7aa0" }}>
-                            <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
-                            No patients with status {filterStatus}
-                        </div>
-                    ) : (
-                        filtered.map((p, idx) => (
-                            <div key={p.id} style={{ ...s.card, position: "relative", zIndex: labAssign.open === p.id ? 100 : (filtered.length - idx) }}>
-                                {/* Patient Row */}
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", alignItems: "center", padding: "18px 20px", gap: 16 }}>
-                                    <div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                            <span style={{ fontFamily: "monospace", color: "#00d4ff", fontWeight: 700, fontSize: 13 }}>{p.patient_code}</span>
-                                            <PriorityBadge priority={p.priority} />
-                                        </div>
-                                        <div style={{ fontSize: 17, fontWeight: 700 }}>{p.name}</div>
-                                        <div style={{ fontSize: 12, color: "#4a6a8a", marginTop: 2 }}>{p.age}y · {p.gender}</div>
-                                    </div>
-
-                                    <div>
-                                        <div style={{ fontSize: 11, textTransform: "uppercase", color: "#4a6a8a", marginBottom: 4 }}>Complaint</div>
-                                        <div style={{ fontSize: 12, color: "#e2eaf5", fontStyle: "italic" }}>"{p.complaint}"</div>
-                                        <div style={{ marginTop: 6 }}><StatusBadge status={p.status} /></div>
-                                    </div>
-
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6, position: "relative" }}>
-                                        {/* Red Alert if Lab Pending */}
-                                        {p.status === "LAB_PENDING" && (
-                                            <div style={{ fontSize: 11, color: "#ef4444", fontWeight: 700, background: "rgba(239,68,68,0.1)", padding: "4px 8px", borderRadius: 4, marginBottom: 4 }}>
-                                                🚨 Doctor Requested Lab Tests
-                                            </div>
-                                        )}
-
-                                        <button onClick={() => setLabAssign(prev => ({ ...prev, open: prev.open === p.id ? null : p.id }))}
-                                            style={{ padding: "8px 14px", borderRadius: 8, background: "linear-gradient(135deg,#f59e0b,#ea580c)", border: "none", color: "#000", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                                            🛠 Add Workflow Step {labAssign.open === p.id ? "▲" : "▼"}
-                                        </button>
-
-                                        {labAssign.open === p.id && (
-                                            <div style={{ position: "absolute", top: "110%", right: 0, width: 280, background: "#060b14", border: "1px solid #1e2d4a", borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8, zIndex: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}>
-
-                                                <button onClick={() => { updateStatus(p.patient_code, "IN_PROGRESS"); nurseAction(p.id, "🏥 Patient Arrived"); }}
-                                                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e2d4a", color: "#e2eaf5", padding: "8px", borderRadius: 6, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
-                                                    ✔ Mark Patient Arrived
-                                                </button>
-
-                                                <button onClick={() => { updateStatus(p.patient_code, "COMPLETED"); nurseAction(p.id, "✅ Consultation Completed"); }}
-                                                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #1e2d4a", color: "#e2eaf5", padding: "8px", borderRadius: 6, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
-                                                    ✅ Mark Consultation Completed
-                                                </button>
-
-                                                <div style={{ borderTop: "1px solid #1e2d4a", paddingTop: 8, marginTop: 4 }}>
-                                                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 6, fontWeight: 700 }}>ADD LAB TEST</div>
-                                                    <input
-                                                        placeholder="e.g. Blood Test, ECG, Scan"
-                                                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #1e2d4a", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12, marginBottom: 6 }}
-                                                        value={labAssign[p.id] || ""}
-                                                        onChange={e => setLabAssign(prev => ({ ...prev, [p.id]: e.target.value }))}
-                                                    />
-                                                    <button onClick={() => assignLabTests(p)}
-                                                        style={{ width: "100%", padding: "6px 12px", borderRadius: 6, background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                                                        ➕ Assign Lab Technician
-                                                    </button>
-                                                </div>
-
-                                                <div style={{ borderTop: "1px solid #1e2d4a", paddingTop: 8, marginTop: 4 }}>
-                                                    <div style={{ fontSize: 11, color: "#4a6a8a", marginBottom: 6, fontWeight: 700 }}>ADD MEDICATION</div>
-                                                    <input
-                                                        placeholder="e.g. Paracetamol 1-0-1 (5 days)"
-                                                        style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #1e2d4a", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12, marginBottom: 6 }}
-                                                        value={labAssign[`med_${p.id}`] || ""}
-                                                        onChange={e => setLabAssign(prev => ({ ...prev, [`med_${p.id}`]: e.target.value }))}
-                                                    />
-                                                    <button onClick={async () => {
-                                                        const medDesc = labAssign[`med_${p.id}`] || "General Medication";
-                                                        try {
-                                                            await authAxios().post("/pharmacy/prescribe", [{
-                                                                patient_id: p.id,
-                                                                medicine_name: medDesc,
-                                                                dosage: "As directed",
-                                                                duration: "Until finished"
-                                                            }]);
-                                                            showToast("✅ Medicines sent to Pharmacy");
-                                                            setLabAssign(prev => ({ ...prev, [`med_${p.id}`]: "" }));
-                                                            fetchData();
-                                                        } catch (err) { showToast("❌ Failed to send to Pharmacy"); }
-                                                    }}
-                                                        style={{ width: "100%", padding: "6px 12px", borderRadius: 6, background: "rgba(59,130,246,0.15)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.3)", fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
-                                                        ➕ Add Prescribed Medicines
-                                                    </button>
-                                                </div>
-
-                                                <div style={{ borderTop: "1px solid #1e2d4a", paddingTop: 8, marginTop: 4 }}>
-                                                    {p.status === "DISCHARGE_PENDING" ? (
-                                                        <button onClick={() => { updateStatus(p.patient_code, "DISCHARGED"); nurseAction(p.id, "🚪 Patient Discharged by Nurse"); }}
-                                                            style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: "linear-gradient(135deg,#22c55e,#16a34a)", color: "#000", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
-                                                            🏁 Mark Final Discharge
-                                                        </button>
-                                                    ) : (
-                                                        <button onClick={async () => {
-                                                            try {
-                                                                await authAxios().post("/billing/generate-discharge-bill", { patient_id: p.id });
-                                                                showToast("✅ Sent to Billing");
-                                                                setLabAssign(prev => ({ ...prev, open: null }));
-                                                                fetchData();
-                                                            } catch (err) { showToast("❌ Failed to send to billing") }
-                                                        }}
-                                                            style={{ width: "100%", padding: "8px 12px", borderRadius: 6, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                                                            💳 Send to Billing
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <button onClick={() => setExpandedTimeline(expandedTimeline === p.id ? null : p.id)}
-                                        style={{ padding: "8px 14px", borderRadius: 8, background: expandedTimeline === p.id ? "#00d4ff15" : "#060b14", border: `1px solid ${expandedTimeline === p.id ? "#00d4ff44" : "#1e2d4a"}`, color: expandedTimeline === p.id ? "#00d4ff" : "#5a7aa0", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                                        {expandedTimeline === p.id ? "▲ Hide" : "📋 Timeline"}
-                                    </button>
+                {loading ? <div style={{ color: "#00d4ff", textAlign: "center", padding: 80 }}>Accessing Secure Patient Database...</div> : filtered.map(p => (
+                    <div key={p.id} style={s.card}>
+                        <div style={{ padding: "20px 24px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 24, alignItems: "center" }}>
+                            <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                    <span style={{ fontFamily: "monospace", color: "#00d4ff", fontWeight: 700, fontSize: 13 }}>{p.patient_code}</span>
+                                    <PriorityBadge priority={p.priority} />
                                 </div>
-
-                                {/* Expandable Timeline */}
-                                {expandedTimeline === p.id && <TimelinePanel patientId={p.id} />}
+                                <h3 style={{ margin: 0, fontSize: 18 }}>{p.name}</h3>
+                                <div style={{ color: "#5a7aa0", fontSize: 12 }}>{p.age}y · {p.gender}</div>
                             </div>
-                        ))
-                    )
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+                            <div>
+                                <div style={{ fontSize: 10, color: "#4a6a8a", textTransform: "uppercase", marginBottom: 4 }}>Condition</div>
+                                <div style={{ fontSize: 13, fontStyle: "italic", mb: 6 }}>"{p.complaint}"</div>
+                                <StatusBadge status={p.status} />
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                {p.status === "PENDING" && <button onClick={() => updateStatus(p, "IN_PROGRESS", "🏥 Patient Admitted to Ward")} style={s.btn("#00d4ff", "#000")}>Admit</button>}
+                                {p.status === "IN_PROGRESS" && <button onClick={() => updateStatus(p, "DOCTOR_VISITED", "🩺 Marked Doctor Consultation Done")} style={s.btn("#10b981", "#000")}>Dr. Visited</button>}
+                                <button onClick={() => setAction({ type: "LAB", p })} style={s.btn("#a855f715", "#a855f7")}>+ Lab Test</button>
+                                <button onClick={() => setAction({ type: "MEDS", p })} style={s.btn("#f59e0b15", "#f59e0b")}>+ Medicine</button>
+                                {p.status === "DISCHARGE_PENDING" && <button onClick={() => updateStatus(p, "DISCHARGED", "🚪 Patient Checked Out")} style={s.btn("#ef4444", "#fff")}>Checked Out</button>}
+                            </div>
+                            <button onClick={() => setExpanded(expanded === p.id ? null : p.id)} style={{ background: "none", border: "none", color: "#5a7aa0", cursor: "pointer", fontSize: 20 }}>{expanded === p.id ? "▲" : "▼"}</button>
+                        </div>
+                        {expanded === p.id && <TimelinePanel patientId={p.id} />}
+                    </div>
+                ))}
+
+                {action && (
+                    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(8px)" }}>
+                        <div style={{ background: "#0d1526", border: "1px solid #1e2d4a", borderRadius: 20, padding: 32, width: "100%", maxWidth: 640 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
+                                <div>
+                                    <h2 style={{ margin: 0 }}>{action.type === "LAB" ? "Assign Lab Tests" : "Prescribe Medication"}</h2>
+                                    <p style={{ color: "#5a7aa0", margin: "4px 0 0" }}>Patient: {action.p.name} ({action.p.patient_code})</p>
+                                </div>
+                                <button onClick={() => setAction(null)} style={{ background: "none", border: "none", color: "#ef4444", fontSize: 24, cursor: "pointer" }}>×</button>
+                            </div>
+                            {action.type === "LAB" ? <AddLabTestsPanel patient={action.p} showToast={showToast} onDone={() => { setAction(null); loadPatients(); }} /> : <AddMedsPanel patient={action.p} showToast={showToast} onDone={() => { setAction(null); loadPatients(); }} />}
+                        </div>
+                    </div>
                 )}
             </div>
-
-            {/* Action Modal */}
-            {selectedPat && actionType && (
-                <div style={{
-                    position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    zIndex: 1000, backdropFilter: "blur(10px)", padding: 20,
-                }}>
-                    <div style={{
-                        background: "#0d1526", border: "1px solid #1e2d4a",
-                        borderRadius: 20, padding: 32, width: "100%", maxWidth: 720,
-                        maxHeight: "90vh", overflowY: "auto",
-                        boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-                    }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-                            <div>
-                                <div style={{ fontSize: 11, color: "#f59e0b", textTransform: "uppercase", letterSpacing: 1, fontFamily: "monospace", marginBottom: 4 }}>
-                                    {ACTIONS.find(a => a.id === actionType)?.label}
-                                </div>
-                                <h2 style={{ margin: 0, fontSize: 22 }}>{selectedPat.name}</h2>
-                                <div style={{ fontSize: 13, color: "#5a7aa0", marginTop: 4 }}>
-                                    {selectedPat.patient_code} · {selectedPat.complaint}
-                                </div>
-                            </div>
-                            <button onClick={closeModal} style={{ background: "none", border: "none", color: "#ef4444", fontSize: 26, cursor: "pointer", fontWeight: 900 }}>×</button>
-                        </div>
-
-                        {actionType === "visit" && <MarkDoctorVisited patient={selectedPat} onDone={onActionDone} showToast={showToast} />}
-                        {actionType === "lab" && <AddLabTests patient={selectedPat} onDone={onActionDone} showToast={showToast} />}
-                        {actionType === "meds" && <AddMedication patient={selectedPat} onDone={onActionDone} showToast={showToast} />}
-                        {actionType === "discharge" && <DischargePatient patient={selectedPat} onDone={onActionDone} showToast={showToast} />}
-                    </div>
-                </div>
-            )}
-
-            {toast && <Toast {...toast} onClose={() => setToast(null)} />}
         </div>
     );
 }

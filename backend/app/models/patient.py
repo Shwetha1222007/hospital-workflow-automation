@@ -53,16 +53,11 @@ class Patient(Base):
     nurse         = relationship("Nurse",  back_populates="patients", foreign_keys=[nurse_id])
     lab_reports   = relationship("LabReport", back_populates="patient")
     workflow_logs = relationship("WorkflowLog", back_populates="patient", cascade="all, delete-orphan")
-<<<<<<< HEAD
-    medications   = relationship("Medication", back_populates="patient")
-    bill          = relationship("Bill", back_populates="patient", uselist=False)
-=======
     tickets       = relationship("Ticket", back_populates="patient", cascade="all, delete-orphan")
     patient_user  = relationship("PatientUser", back_populates="patient", uselist=False, cascade="all, delete-orphan")
     medicines     = relationship("MedicinePrescription", back_populates="patient", cascade="all, delete-orphan")
     invoices      = relationship("Invoice", back_populates="patient", cascade="all, delete-orphan")
 
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
 
 
 def generate_patient_code(session: Session) -> str:

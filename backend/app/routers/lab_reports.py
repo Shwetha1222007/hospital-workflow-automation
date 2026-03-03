@@ -100,15 +100,13 @@ def get_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-<<<<<<< HEAD
-=======
     """
     Lab Technician: View only assigned requests.
     Doctor: View requests they prescribed.
     Patient: View their own requests (and ETA logic).
     Admin: View all.
     """
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
     q = db.query(LabReport)
 
     if current_user.role == UserRole.DOCTOR:
@@ -123,9 +121,6 @@ def get_reports(
         q = q.filter(LabReport.status == status.upper())
 
     reports = q.order_by(LabReport.created_at.desc()).all()
-<<<<<<< HEAD
-    return [_enrich_report(r) for r in reports]
-=======
     
     # Pre-calculate queue for PENDING reports
     out = []
@@ -165,7 +160,7 @@ def get_reports(
         out.append(report_data)
 
     return out
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
 
 
 # ── POST /assign — Nurse only ─────────────────────────────────────────────
@@ -176,25 +171,20 @@ def assign_tests(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-<<<<<<< HEAD
-=======
     """Nurse assigns specific lab tests to Lab Technicians."""
     if current_user.role != UserRole.NURSE:
         raise HTTPException(403, "Only nurses can assign specific lab tests")
 
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
     added = []
     patient_id = None
 
     for r in requests:
         patient_id = r.patient_id
         code = generate_report_code(db)
-<<<<<<< HEAD
-
-=======
         
         # Auto-assign labtech if not provided
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
         l_id = r.labtech_id
         if not l_id:
             techs = db.query(User).filter(User.role == UserRole.LAB_TECHNICIAN).all()
@@ -214,28 +204,11 @@ def assign_tests(
         db.commit()
         db.refresh(report)
 
-<<<<<<< HEAD
-    if patient_id:
-        log = WorkflowLog(
-            patient_id = patient_id,
-            stage      = WorkflowStage.LAB,
-            status     = WorkflowStatus.ASSIGNED,
-            updated_by = current_user.id,
-            notes      = f"Doctor prescribed {len(added)} lab test(s). Stage moved to LAB."
-        )
-        db.add(log)
-
-=======
     # Log workflow transition — LAB ASSIGNED (RED: waiting for lab)
     if patient_id:
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
         p = db.query(Patient).filter(Patient.id == patient_id).first()
         test_names = ", ".join(r.test_type for r in added)
         if p:
-<<<<<<< HEAD
-            p.status = "LAB_PENDING"
-
-=======
             p.status = "LAB_IN_PROGRESS"
             log_movement(
                 db,
@@ -249,7 +222,7 @@ def assign_tests(
                 status       = "PENDING",
                 color_code   = LogColor.RED,
             )
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
         db.commit()
 
     return [_enrich_report(r) for r in added]
@@ -382,17 +355,6 @@ async def upload_lab_report(
     db.commit()
     db.refresh(report)
 
-<<<<<<< HEAD
-    # Check if all lab tests for this patient are done
-    remaining = db.query(LabReport).filter(
-        LabReport.patient_id == report.patient_id,
-        LabReport.status != LabStatus.COMPLETED
-    ).count()
-
-    if remaining == 0:
-        # All tests done — log LAB COMPLETED
-        lab_done_log = WorkflowLog(
-=======
     remaining = db.query(LabReport).filter(
         LabReport.patient_id == report.patient_id,
         LabReport.status     != LabStatus.COMPLETED
@@ -402,36 +364,16 @@ async def upload_lab_report(
 
     if remaining == 0:
         wlog = WorkflowLog(
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
             patient_id = report.patient_id,
             stage      = WorkflowStage.LAB,
             status     = WorkflowStatus.COMPLETED,
             updated_by = current_user.id,
             notes      = f"All lab tests completed. Reports available."
         )
-<<<<<<< HEAD
-        db.add(lab_done_log)
-
-        # Auto re-add Doctor Visit (PENDING)
-        doc_revisit_log = WorkflowLog(
-            patient_id = report.patient_id,
-            stage      = WorkflowStage.DOCTOR,
-            status     = WorkflowStatus.PENDING,
-            updated_by = current_user.id,
-            notes      = "Lab reports ready. Doctor re-visit automatically scheduled."
-        )
-        db.add(doc_revisit_log)
-
-        p = db.query(Patient).filter(Patient.id == report.patient_id).first()
-=======
         db.add(wlog)
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
         if p:
             p.status = "DOCTOR_REVIEW_PENDING"
 
-<<<<<<< HEAD
-    return _enrich_report(report)
-=======
         # GREEN log for Lab Completed
         log_movement(
             db,
@@ -476,7 +418,7 @@ async def upload_lab_report(
 
     db.commit()
     return report
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
 
 
 @router.patch("/{report_id}/status", response_model=LabReportOut)
@@ -504,19 +446,12 @@ def update_status(
     report.updated_at = datetime.utcnow()
 
     if new_status == LabStatus.IN_PROGRESS:
-<<<<<<< HEAD
-        log = WorkflowLog(
-=======
         wlog = WorkflowLog(
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
             patient_id       = report.patient_id,
             stage            = WorkflowStage.LAB,
             status           = WorkflowStatus.IN_PROGRESS,
             assigned_user_id = current_user.id,
             updated_by       = current_user.id,
-<<<<<<< HEAD
-            notes            = f"Test {report.test_type} is now in progress by {current_user.full_name}."
-=======
             notes            = f"Test {report.test_type} is now in progress."
         )
         db.add(wlog)
@@ -531,8 +466,8 @@ def update_status(
             updated_by   = current_user.id,
             status       = "IN_PROGRESS",
             color_code   = LogColor.YELLOW,
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
         )
+
 
     db.commit()
     db.refresh(report)
