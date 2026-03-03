@@ -32,11 +32,8 @@ def create_user(email, password, name, role):
 
 
 def seed():
-<<<<<<< HEAD
-    print("Seeding MedFlow v3 database...")
-=======
     print("Seeding MedFlow v4 database...")
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
 
     # ── Super Admin ───────────────────────────────────────────────────────────
     admin = create_user("admin@medflow.com", "admin123", "Super Admin", UserRole.SUPER_ADMIN)
@@ -54,11 +51,8 @@ def seed():
         u = create_user(email, pwd, name, UserRole.DOCTOR)
         d = Doctor(user_id=u.id, specialization=spec, department=dept)
         db.add(d); db.flush(); doctors.append(d)
-<<<<<<< HEAD
-        print(f"  Doctor: {name} - {spec}")
-=======
         print(f"  Doctor: {name} -- {spec}")
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
 
     # ── Nurses (2 per doctor) ─────────────────────────────────────────────────
     NURSES = [
@@ -124,13 +118,6 @@ def seed():
             created_by              = admin.id,
         )
         db.add(pat); db.flush()
-<<<<<<< HEAD
-        print(f"  Patient: {code} {p['name']} -> {spec} ({doc.user.full_name if doc and doc.user else 'None'})")
-
-    db.commit()
-
-    print("\nDatabase seeded!")
-=======
         patients.append(pat)
 
         # Create Patient login account (username = patient_code, password = patient_code)
@@ -183,7 +170,7 @@ def seed():
     db.commit()
 
     print("\nDatabase seeded successfully!")
->>>>>>> aecf9119b8ddc74c35cc7495da6266856b19c72f
+
     print("\nLOGIN CREDENTIALS:")
     print("  Super Admin  : admin@medflow.com       / admin123")
     print("  Cardiologist : dr.sharma@medflow.com   / doc123")
